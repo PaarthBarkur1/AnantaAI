@@ -13,3 +13,6 @@ tqdm>=4.60.0
 # jupyter
 # Optional: for model card downloads
 # huggingface-hub>=0.0.8
+# Web scraping requirements
+requests>=2.28.0
+beautifulsoup4>=4.9.3
