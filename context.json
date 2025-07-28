@@ -1,0 +1,112 @@
+[
+  {
+    "question": "How are the interviews at IISc? Are they math-heavy?",
+    "answer": "The interviews typically focus on statistics and math topics such as probability. However, depending on your background, questions can also cover economics, coding, or specific domain knowledge. Coding is not a strict prerequisite but helpful especially for CS backgrounds. The interview also includes a group discussion and a brief written summary exercise.",
+    "metadata": {
+      "topic": "Interview",
+      "last_updated": "July 2025",
+      "source": "IISc M.Mgt community responses",
+      "keywords": ["interview", "math", "statistics", "coding", "group discussion"]
+    }
+  },
+  {
+    "question": "What areas do the majority of M.Mgt graduates get placed in?",
+    "answer": "Most graduates are placed in data science, quantitative finance, AI research, and analytics roles. Product management and marketing roles are rare. Companies like Wells Fargo, JPMC, Uber, and Quantum Street AI are typical recruiters.",
+    "metadata": {
+      "topic": "Placement",
+      "last_updated": "July 2025",
+      "source": "IISc placement reports and student inputs",
+      "keywords": ["data science", "quant finance", "AI", "placement", "companies"]
+    }
+  },
+  {
+    "question": "How is the placement process?",
+    "answer": "M.Mgt students participate in IISc’s central placement (with M.Tech/MS students) as well as departmental placements exclusive to the Department of Management Studies. These provide broad access to recruiters from analytics, banking, tech, and research sectors. Nearly all students get placed historically, including those with gap years or diverse backgrounds.",
+    "metadata": {
+      "topic": "Placement",
+      "last_updated": "July 2025",
+      "source": "IISc M.Mgt community",
+      "keywords": ["placement process", "central placement", "departmental placement"]
+    }
+  },
+  {
+    "question": "What is the average placement package and how is the SIP scenario?",
+    "answer": "Average CTC: ~₹27 LPA. Median CTC: ~₹24 LPA. Highest CTC: ₹35 LPA+. Typical in-hand: ₹20 LPA+. SIP pay is comparable to top analytics internships. Candidates from CSE/IT backgrounds or with prior SDE experience see offers above ₹30 LPA. The distribution is right-skewed due to high offers in quant/AI roles.",
+    "metadata": {
+      "topic": "Placement Statistics",
+      "last_updated": "July 2025",
+      "source": "IISc placement reports",
+      "keywords": ["placement stats", "average CTC", "SIP", "packages"]
+    }
+  },
+  {
+    "question": "Can humanities students like BA English apply? Is IISc only for engineers?",
+    "answer": "As of 2025, the program mainly accepts candidates with a 4-year STEM degree such as B.E., B.Tech, B.Arch, or B.Planning. Humanities degrees are currently not eligible. Most students have engineering backgrounds, but related STEM fields are also accepted.",
+    "metadata": {
+      "topic": "Eligibility",
+      "last_updated": "July 2025",
+      "source": "IISc admission criteria",
+      "keywords": ["eligibility", "STEM", "engineering", "humanities"]
+    }
+  },
+  {
+    "question": "What percentile is required for admission?",
+    "answer": "For the General category, the CAT/GATE percentile cutoff is approximately 98.8. Full category-wise cutoffs are available in the official document: https://iisc.ac.in/wp-content/uploads/2024/03/Cut-Off-Report-for-M.Mgt-Programme-2024.pdf",
+    "metadata": {
+      "topic": "Admission",
+      "last_updated": "July 2025",
+      "source": "Official IISc document",
+      "keywords": ["percentile", "admission cutoffs", "CAT", "GATE"]
+    }
+  },
+  {
+    "question": "What do companies look for in a CV for PM roles? Are there certifications that help?",
+    "answer": "PM roles are rare in IISc M.Mgt placements. When they occur, companies value projects with tangible outcomes, leadership, internships, and strong communication. Certifications such as Scrum or Product Management can help but are not mandatory. Relevant work experience can assist but is not a formal selection criterion.",
+    "metadata": {
+      "topic": "Placement - PM Roles",
+      "last_updated": "July 2025",
+      "source": "IISc M.Mgt community",
+      "keywords": ["PM roles", "CV tips", "certifications", "work experience"]
+    }
+  },
+  {
+    "question": "How is student life and work-life balance at IISc for M.Mgt students?",
+    "answer": "Student life is described as chill and balanced. Classes are held 4 days a week (Monday to Thursday) from 9:30 AM to 2 PM, with Fridays reserved for seminars. Students enjoy ample free time, modern sports facilities (football, cricket), single-room accommodation, and the beautiful IIT campus atmosphere. The library, night canteens, and extracurricular activities provide a vibrant campus experience.",
+    "metadata": {
+      "topic": "Student Life",
+      "last_updated": "July 2025",
+      "source": "IISc student community inputs",
+      "keywords": ["work-life balance", "student life", "campus", "sports", "recreation"]
+    }
+  },
+  {
+    "question": "Does having gap years affect admission or placement?",
+    "answer": "Gap years do not negatively impact admission or placement outcomes. In fact, some of the highest salary offers have gone to candidates with gap years, provided they demonstrate strong performance.",
+    "metadata": {
+      "topic": "Admission and Placement",
+      "last_updated": "July 2025",
+      "source": "IISc M.Mgt community",
+      "keywords": ["gap years", "admission", "placement"]
+    }
+  },
+  {
+    "question": "What should I prepare for in the interview?",
+    "answer": "Focus especially on basic math and probability, statistics, and coding if applicable. Prepare to discuss your projects and previous work experience. Group discussion topics usually relate to general knowledge and communication skills.",
+    "metadata": {
+      "topic": "Interview Preparation",
+      "last_updated": "July 2025",
+      "source": "IISc M.Mgt community",
+      "keywords": ["interview prep", "coding", "probability", "group discussion"]
+    }
+  },
+  {
+    "question": "Does work experience add benefit in final selection? What documents are needed?",
+    "answer": "There is no formal advantage in scoring for work experience, but relevant experience may help during interviews. Standard documentation like payslips, ITRs, and employer letters are generally required to verify work experience.",
+    "metadata": {
+      "topic": "Admission",
+      "last_updated": "July 2025",
+      "source": "IISc M.Mgt community",
+      "keywords": ["work experience", "selection", "documents"]
+    }
+  }
+]
