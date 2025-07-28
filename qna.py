@@ -1,116 +1,230 @@
 import json
 import argparse
-from transformers import AutoTokenizer, AutoModelForQuestionAnswering, pipeline
-from sentence_transformers import SentenceTransformer
+from typing import List, Dict, Any
+from abc import ABC, abstractmethod
+
 import faiss
-import numpy as np
-from typing import List, Dict, Any, Optional
+from sentence_transformers import SentenceTransformer
 
-def load_faq_data(filepath: str) -> List[Dict[str, Any]]:
-    """Load FAQ data from a JSON file."""
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            faq_data = json.load(f)
-    except Exception as e:
-        raise RuntimeError(f"Failed to load FAQ data: {e}")
-    if not faq_data or not isinstance(faq_data, list):
-        raise ValueError("FAQ data is empty or not a list.")
-    return faq_data
+from transformers import pipeline
 
-def build_documents(faq_data: List[Dict[str, Any]]) -> List[str]:
-    """Extract answers (or questions+answers) for retrieval."""
-    docs = []
-    for entry in faq_data:
-        answer = entry.get('answer', '')
-        question = entry.get('question', '')
-        if answer and question:
-            docs.append(f"Q: {question}\nA: {answer}")
-        elif answer:
-            docs.append(answer)
-        elif question:
-            docs.append(question)
-        else:
-            docs.append('')
-    return docs
+from webscrapper import WebScraper
 
-def build_index(documents: List[str], embedder) -> faiss.IndexFlatL2:
-    """Build FAISS index from document embeddings."""
-    doc_embeddings = embedder.encode(documents, convert_to_numpy=True)
-    dimension = doc_embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
-    index.add(doc_embeddings)
-    return index, doc_embeddings
 
-def answer_query(query: str, faq_data: List[Dict[str, Any]], documents: List[str],
-                 embedder, index, qa_pipeline, top_k: int = 3) -> List[Dict[str, Any]]:
-    """
-    Retrieve top_k answers to a query from the FAQ using semantic search and QA model.
-    Returns a list of answer dicts sorted by QA score.
-    """
-    if not query or not isinstance(query, str):
-        raise ValueError("Query must be a non-empty string.")
+# ---------------------------
+# Content Source Abstract and Implementations
+# ---------------------------
 
-    query_emb = embedder.encode([query], convert_to_numpy=True)
-    distances, indices = index.search(query_emb, top_k)
+class ContentSource(ABC):
+    """Abstract base class"""
+    @abstractmethod
+    def get_content(self) -> List[Dict[str, Any]]:
+        pass
 
-    candidates = []
-    for idx in indices[0]:
-        context = documents[idx]
-        result = qa_pipeline(question=query, context=context)
-        candidates.append({
-            'answer': result.get('answer', ''),
-            'score': result.get('score', 0.0),
-            'context': context,
-            'metadata': faq_data[idx].get('metadata', {}),
-            'faq_entry': faq_data[idx]
-        })
-    candidates.sort(key=lambda x: x['score'], reverse=True)
-    return candidates
+
+class JSONContentSource(ContentSource):
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+
+    def get_content(self) -> List[Dict[str, Any]]:
+        try:
+            with open(self.filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if not isinstance(data, list):
+                raise ValueError("JSON data must be a list of QA pairs")
+            return data
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load JSON data from {self.filepath}: {e}")
+
+
+class WebContentSource(ContentSource):
+    def __init__(self, url: str):
+        self.url = url
+        self.scraper = WebScraper()
+
+    def get_content(self) -> List[Dict[str, Any]]:
+        paragraphs = self.scraper.scrape_paragraphs(self.url)
+        # Wrap paragraphs as FAQ-like entries with generic questions
+        return [
+            {
+                "question": f"Web Content #{i + 1}",
+                "answer": para,
+                "metadata": {"source": "web", "url": self.url}
+            }
+            for i, para in enumerate(paragraphs) if para.strip()
+        ]
+
+
+# ---------------------------
+# Context Agent with Semantic Search
+# ---------------------------
+
+class ContextAgent:
+    def __init__(self):
+        self.sources: List[ContentSource] = []
+        self.faq_data: List[Dict[str, Any]] = []
+
+        self.embedder = None
+        self.doc_embeddings = None
+        self.index = None
+        self.documents = None
+
+    def add_source(self, source: ContentSource) -> None:
+        self.sources.append(source)
+        self.faq_data.extend(source.get_content())
+
+    def get_faq_data(self) -> List[Dict[str, Any]]:
+        return self.faq_data
+
+    def get_source_confidence(self, source_type: str) -> float:
+        confidence_scores = {
+            "json": 0.9,
+            "web": 0.7,
+        }
+        return confidence_scores.get(source_type, 0.5)
+
+    def build_semantic_search_index(self, embedder: SentenceTransformer) -> None:
+        self.embedder = embedder
+        self.documents = []
+        for entry in self.faq_data:
+            question = entry.get("question", "")
+            answer = entry.get("answer", "")
+            source = entry.get("metadata", {}).get("source", "unknown")
+            doc_text = f"Question: {question}\nAnswer: {answer}\nSource: {source}"
+            self.documents.append(doc_text)
+        if not self.documents:
+            raise ValueError("No documents to index for semantic search.")
+
+        self.doc_embeddings = embedder.encode(
+            self.documents, convert_to_numpy=True)
+        dim = self.doc_embeddings.shape[1]
+        self.index = faiss.IndexFlatL2(dim)
+        self.index.add(self.doc_embeddings)
+
+    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        if self.index is None or self.embedder is None:
+            raise RuntimeError(
+                "Semantic index not built. Call build_semantic_search_index() first.")
+
+        query_emb = self.embedder.encode([query], convert_to_numpy=True)
+        distances, indices = self.index.search(query_emb, top_k)
+        return [self.faq_data[idx] for idx in indices[0]]
+
+
+# ---------------------------
+# QA Agent - Llama 2 7B Chat
+# ---------------------------
+
+class QAAgent:
+    def __init__(self, device: int = 0):
+        self.generator = pipeline(
+            "text-generation",
+            model="google/gemma-2b-it",  # or "google/gemma-7b-it" if your VRAM allows
+            tokenizer="google/gemma-2b-it",
+            device=device,  # 0 = first GPU, -1 = CPU
+            max_length=512,
+            temperature=0.7,
+            top_p=0.95,
+            do_sample=True,
+            # for 4b: load_in_4bit=True, trust_remote_code=True
+        )
+
+    def process_query(self, query: str, context_agent: ContextAgent, top_k: int = 5) -> Dict[str, Any]:
+        top_contexts = context_agent.search(query, top_k=top_k)
+        context_text = "\n\n".join([c.get("answer", "") for c in top_contexts])
+
+        prompt = (
+            f"Question: {query}\n"
+            f"Context:\n{context_text}\n"
+            f"Answer the question and explain step-by-step:"
+        )
+        try:
+            outputs = self.generator(prompt)
+            answer = outputs[0]["generated_text"]
+        except Exception as e:
+            answer = f"Generation error: {e}"
+
+        return {
+            "answer": answer,
+            "score": None,
+            "thought_process": "Answer generated by Llama-2-7b-chat",
+            "context": context_text,
+            "metadata": {},
+            "source_type": "llama-2-7b-chat",
+            "faq_entry": {}
+        }
+
+
+# ---------------------------
+# Helper Print Function
+# ---------------------------
 
 def print_answers(query: str, answers: List[Dict[str, Any]], max_print: int = 1):
-    """Pretty-print the top answers for a query."""
     print(f"\nQuestion: {query}")
+    print("-" * 80)
     for i, ans in enumerate(answers[:max_print]):
-        print(f"\nTop Answer #{i+1}:")
-        print(f"Answer: {ans['answer']}")
-        print(f"Score: {ans['score']:.4f}")
-        print(f"Source Info: {ans['metadata']}")
-        faq_entry = ans.get('faq_entry', {})
-        if 'question' in faq_entry:
-            print(f"FAQ Question: {faq_entry['question']}")
-        # Uncomment to print context
-        # print(f"Context: {ans['context']}")
+        print(f"\nAnswer #{i+1}:")
+        print(f"└─ Answer: {ans.get('answer', 'No answer found')}")
+        if ans.get('score') is not None:
+            print(f"└─ Confidence: {ans.get('score', 0):.2%}")
+        print(f"└─ Source Type: {ans.get('source_type', 'unknown')}")
+        if ans.get('thought_process'):
+            thought = ans['thought_process'].strip()
+            print(f"└─ Reasoning:\n{thought}")
+        context = ans.get('context', '')
+        if context and len(context) > 100:
+            context = context[:100] + "..."
+        if context:
+            print(f"└─ Context: {context}")
+        print("-" * 40)
+
+
+# ---------------------------
+# Main Function
+# ---------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="FAQ Semantic QA Retriever")
-    parser.add_argument('--faq', type=str, default='.json', help='Path to FAQ JSON file')
-    parser.add_argument('--query', nargs='+', help='Question to ask (can be multiple words)')
-    parser.add_argument('--top_k', type=int, default=3, help='Number of top answers to retrieve')
-    parser.add_argument('--max_print', type=int, default=2, help='Number of answers to print')
+    parser = argparse.ArgumentParser(
+        description="Llama 2 7B Chat Semantic QA Retriever")
+    parser.add_argument('--faq', type=str, default=None,
+                        help='Path to FAQ JSON file')
+    parser.add_argument('--url', type=str, default=None,
+                        help='URL to scrape paragraphs from')
+    parser.add_argument('--query', nargs='+', required=False,
+                        help='Question to ask (can be multiple words)')
+    parser.add_argument('--max_print', type=int, default=2,
+                        help='Number of answers to print')
+    parser.add_argument('--top_k', type=int, default=5,
+                        help='Top K contexts to retrieve for generation')
+    parser.add_argument('--device', type=int, default=0,
+                        help='Device index (GPU id). Set to -1 for CPU')
     args = parser.parse_args()
 
-    faq_data = load_faq_data(args.faq)
-    documents = build_documents(faq_data)
+    context_agent = ContextAgent()
+    if args.faq:
+        context_agent.add_source(JSONContentSource(args.faq))
+    if args.url:
+        context_agent.add_source(WebContentSource(args.url))
 
-    try:
-        embedder = SentenceTransformer('all-MiniLM-L6-v2')
-    except Exception as e:
-        raise RuntimeError(f"Failed to load SentenceTransformer: {e}")
+    if not context_agent.get_faq_data():
+        print("No content sources provided. Use --faq and/or --url")
+        return
 
-    index, _ = build_index(documents, embedder)
+    embedder = SentenceTransformer('all-MiniLM-L6-v2')
+    context_agent.build_semantic_search_index(embedder)
 
-    model_name = "deepset/roberta-base-squad2"
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForQuestionAnswering.from_pretrained(model_name)
-        qa_pipeline = pipeline('question-answering', model=model, tokenizer=tokenizer)
-    except Exception as e:
-        raise RuntimeError(f"Failed to load QA model: {e}")
+    agent = QAAgent(device=args.device)
 
-    # Join query words if provided
-    query = ' '.join(args.query) if args.query else input("Enter your question: ")
-    answers = answer_query(query, faq_data, documents, embedder, index, qa_pipeline, top_k=args.top_k)
-    print_answers(query, answers, max_print=args.max_print)
+    query = ' '.join(args.query) if args.query else input(
+        "Enter your question: ").strip()
+    if not query:
+        print("No query given. Exiting.")
+        return
+
+    result = agent.process_query(query, context_agent, top_k=args.top_k)
+    print_answers(query, [result], max_print=args.max_print)
+
 
 if __name__ == "__main__":
     main()

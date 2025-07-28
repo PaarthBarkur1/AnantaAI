@@ -108,5 +108,46 @@
       "source": "IISc M.Mgt community",
       "keywords": ["work experience", "selection", "documents"]
     }
+  },
+  {
+    "question": "What is the M.Mgt program at IISc?",
+    "answer": "The Master of Management (M.Mgt) program at IISc is a two-year, full-time postgraduate program designed for graduate engineers. It focuses on developing management skills in technology-intensive and data-driven organizations.",
+    "metadata": {"source": "program brochure"}
+  },
+  {
+    "question": "What is the eligibility criteria for the M.Mgt program?",
+    "answer": "Candidates must have a four-year Bachelor's degree in Engineering/Technology or equivalent with a minimum of 60% marks or equivalent CGPA. Candidates with a Master's degree in Science or Commerce with Mathematics as a subject are also eligible.",
+    "metadata": {"source": "program brochure"}
+  },
+  {
+    "question": "What are the objectives of the program?",
+    "answer": "To enable graduate engineers to grow into competent and creative managers of technology intensive and data driven organizations. To encourage entrepreneurship for high technology start-ups. To attract and foster doctoral students in management.",
+    "metadata": {"source": "program brochure"}
+  },
+  {
+    "question": "What is the course structure?",
+    "answer": "Hard Core Courses = 8 X 3 credits = 24 credits; Stream Core Courses = 4 X 3 credits = 12 credits; Electives = 12 credits; Project work = 16 credits; Total = 64 credits.",
+    "metadata": {"source": "program brochure"}
+  },
+  {
+    "question": "What are the hard core courses?",
+    "answer": "Introductory Probability Theory, Applied Statistics, Operations Management, Marketing Management, Behavioral Science, Managerial Economics, Human Resource Management, Marketing Management.",
+    "metadata": {"source": "program brochure"}
+  },
+  {
+    "question": "What are the business analytics stream core courses?",
+    "answer": "Operations Research, Regression and Time Series Analysis, Data Mining, Decision Models.",
+    "metadata": {"source": "program brochure"}
+  },
+  {
+    "question": "What are the suggested electives?",
+    "answer": "Macroeconomics, Linear and Non-linear programming, Deep Learning for NLP, Management of Technology for Sustainability, Entrepreneurship for Technology Start-ups, Random processes, Modeling and Simulation, Introduction to Scalable Systems, Public Policy Theory & Process.",
+    "metadata": {"source": "program brochure"}
+  },
+  {
+    "question": "What is the summer term about?",
+    "answer": "Public Sector as well as Private Sector R&D Organizations, and High-tech Industries in the Corporate Sector. Alternatively, exposure to Business Incubation, Venture Capital Funds, and Successful Start-Ups is encouraged.",
+    "metadata": {"source": "program brochure"}
   }
 ]
+
