@@ -1,5 +1,6 @@
 # AnantaAI
-python qna.py --faq D:\anantai\context.json --query what is life like? --top_k 3 --max_print 2
+python qna.py --faq D:\anantai\AnantaAI\context.json --query what are the hard core courses? --max_print 2 --url https://mgmt.iisc.ac.in/master-management/ 
+
 
 
 command to run
