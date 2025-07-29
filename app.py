@@ -4,6 +4,7 @@ import time
 import logging
 import re
 import unicodedata
+import json
 from collections import deque
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple, List
@@ -21,11 +22,25 @@ from qna import (
 from faq_data import FAQ_DATA
 
 # --- enhanced logging -------------------------------------------------------
+# Configure root logger to only show WARNING and above
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.WARNING,
+    format="%(levelname)s - %(message)s"
 )
+
+# Configure our app's logger to show INFO and above
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Suppress common warning messages
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("pytorch_pretrained_bert").setLevel(logging.ERROR)
+logging.getLogger("pytorch_transformers").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("faiss").setLevel(logging.ERROR)
+logging.getLogger("torch").setLevel(logging.ERROR)
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 
 st.set_page_config(
     page_title="IISc M.Mgt QA System",
@@ -91,7 +106,7 @@ st.markdown("""
 # --- constants ---------------------------------------------------------------
 CONFIG = {
     "faq_file": "context.json",
-    "url": "https://mgmt.iisc.ac.in",
+    "sources_file": "sources.json",  # Added sources.json configuration
     "max_length": 1024,
     "max_new_tokens": 150,
     "temperature": 0.3,
@@ -136,10 +151,14 @@ def log_step(message: str, success: bool = True):
     status = "✓" if success else "✗"
     log_entry = f"[{timestamp}] {status} {message}"
     st.session_state.initialization_logs.append(log_entry)
-    if success:
-        logger.info(message)
-    else:
+    
+    # Only log important information to terminal
+    if not success:
         logger.error(message)
+    elif "failed" in message.lower() or "error" in message.lower():
+        logger.warning(message)
+    elif "completed" in message.lower() or "initialized" in message.lower():
+        logger.info(message)
 
 
 def clean_text(txt: str) -> str:
@@ -175,7 +194,7 @@ def extract_suggestions(text: str) -> List[str]:
 def process_query(query: str) -> Dict[str, Any]:
     """Process a query and return results"""
     if not query or st.session_state.processing_query:
-        return None
+        return {"error": "Invalid query or processing in progress"}
 
     st.session_state.processing_query = True
     start = time.time()
@@ -332,6 +351,8 @@ def initialize():
         log_step("ContextAgent created successfully")
 
         sources_added = 0
+        
+        # Add JSON FAQ source
         try:
             agent.add_source(JSONContentSource(CONFIG["faq_file"]))
             log_step(f"JSON source added: {CONFIG['faq_file']}")
@@ -339,12 +360,24 @@ def initialize():
         except Exception as e:
             log_step(f"JSON source failed: {e}", False)
 
+        # Load and add all web sources from sources.json
         try:
-            agent.add_source(WebContentSource(CONFIG["url"]))
-            log_step(f"Web source added: {CONFIG['url']}")
-            sources_added += 1
+            with open(CONFIG["sources_file"], 'r', encoding='utf-8') as f:
+                web_sources = json.load(f)
+            log_step(f"Found {len(web_sources)} web sources in {CONFIG['sources_file']}")
+            
+            for source in web_sources:
+                try:
+                    web_source = WebContentSource(source["url"])
+                    agent.add_source(web_source)
+                    log_step(f"Web source added: {source['name']} ({source['url']})")
+                    sources_added += 1
+                except Exception as e:
+                    log_step(f"Failed to add web source {source.get('name', 'Unknown')}: {e}", False)
+                    continue
+                    
         except Exception as e:
-            log_step(f"Web source failed: {e}", False)
+            log_step(f"Failed to load web sources from {CONFIG['sources_file']}: {e}", False)
 
         if sources_added == 0:
             raise RuntimeError("No data sources available")

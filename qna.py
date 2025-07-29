@@ -53,10 +53,11 @@ def select_relevant_sources(question: str, sources: List[Dict[str, Any]], top_n:
     # Always return at least one source, even if no overlap
     return [s[1] for s in scored if s[0] > 0][:top_n] or [scored[0][1]]
 
-    """Given a question, select and return WebContentSource objects for the most relevant sources."""
-    sources = load_sources_config(sources_path)
-    selected = select_relevant_sources(question, sources, top_n=max_sources)
-    return [WebContentSource(src["url"]) for src in selected]
+
+
+# ---------------------------
+# Configuration and Data Classes
+# ---------------------------
 
 # ---------------------------
 # Configuration and Data Classes
@@ -170,7 +171,7 @@ class JSONContentSource(ContentSource):
 
 
 class WebContentSource(ContentSource):
-    """Web scraping content source with retry logic"""
+    """Enhanced web scraping content source with comprehensive content extraction"""
 
     def __init__(self, url: str, max_retries: int = 3):
         self.url = url
@@ -182,41 +183,102 @@ class WebContentSource(ContentSource):
         return "web"
 
     def get_content(self) -> List[Dict[str, Any]]:
-        """Scrape content with retry logic and caching"""
+        """Scrape content with enhanced capabilities and better structure"""
         if self._cache is not None:
             return self._cache
 
         for attempt in range(self.max_retries):
             try:
-                logger.info(
-                    f"Scraping content from {self.url} (attempt {attempt + 1})")
-                paragraphs = self.scraper.scrape_paragraphs(self.url)
-
-                if not paragraphs:
-                    raise ValueError("No content found at URL")
-
-                # Convert paragraphs to QA format with better structure
+                logger.info(f"Scraping content from {self.url} (attempt {attempt + 1})")
                 content = []
+
+                # Get paragraphs with main content
+                paragraphs = self.scraper.scrape_paragraphs(self.url)
                 for i, para in enumerate(paragraphs):
-                    if para.strip() and len(para.strip()) > 50:  # Filter out very short paragraphs
+                    if para.strip() and len(para.strip()) > 50:  # Filter meaningful paragraphs
                         content.append({
-                            "question": f"Web Content Section {i + 1}",
+                            "question": f"Main Content Section {i + 1}",
                             "answer": para.strip(),
                             "metadata": {
                                 "source": self.get_source_type(),
                                 "url": self.url,
-                                "section_id": i + 1,
-                                "content_length": len(para)
+                                "type": "paragraph",
+                                "section_id": i + 1
                             }
                         })
 
-                logger.info(
-                    f"Successfully scraped {len(content)} sections from {self.url}")
+                # Get headlines for structure
+                headlines = self.scraper.scrape_headlines(self.url)
+                for i, headline in enumerate(headlines):
+                    content.append({
+                        "question": f"Section Heading {i + 1}",
+                        "answer": headline["text"],
+                        "metadata": {
+                            "source": self.get_source_type(),
+                            "url": self.url,
+                            "type": "headline",
+                            "level": headline["level"]
+                        }
+                    })
+
+                # Try to get structured table data
+                tables = self.scraper.scrape_table_data(self.url)
+                for i, table in enumerate(tables):
+                    if table:  # Only process non-empty tables
+                        table_content = "\n".join([" | ".join(row) for row in table])
+                        content.append({
+                            "question": f"Table Content {i + 1}",
+                            "answer": table_content,
+                            "metadata": {
+                                "source": self.get_source_type(),
+                                "url": self.url,
+                                "type": "table",
+                                "table_id": i + 1
+                            }
+                        })
+
+                # Get WordPress recent posts if available
+                try:
+                    recent_posts = self.scraper.scrape_wordpress_recent_posts(self.url)
+                    for i, post in enumerate(recent_posts):
+                        content.append({
+                            "question": f"Recent Post {i + 1}",
+                            "answer": f"Title: {post['title']}\nLink: {post['link']}",
+                            "metadata": {
+                                "source": self.get_source_type(),
+                                "url": self.url,
+                                "type": "wordpress_post",
+                                "post_id": i + 1
+                            }
+                        })
+                except Exception as wp_error:
+                    logger.debug(f"Not a WordPress site or no recent posts: {wp_error}")
+
+                # Try specific content areas if no content found yet
+                if not content:
+                    specific_content = self.scraper.scrape_specific_element(self.url, "div.entry-content, article, .content-area")
+                    for i, text in enumerate(specific_content):
+                        if text.strip() and len(text.strip()) > 50:
+                            content.append({
+                                "question": f"Specific Content Section {i + 1}",
+                                "answer": text.strip(),
+                                "metadata": {
+                                    "source": self.get_source_type(),
+                                    "url": self.url,
+                                    "type": "specific_content",
+                                    "section_id": i + 1
+                                }
+                            })
+
+                if not content:
+                    raise ValueError("No content found at URL")
+
+                logger.info(f"Successfully scraped {len(content)} items from {self.url}")
                 self._cache = content
                 return content
 
             except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
                 if attempt == self.max_retries - 1:
                     raise RuntimeError(
                         f"Failed to scrape content from {self.url} after {self.max_retries} attempts: {e}")
@@ -336,7 +398,7 @@ class ContextAgent:
             train_data = self.doc_embeddings.astype(np.float32)
             assert train_data.ndim == 2, f"train_data must be 2D, got shape {train_data.shape}"
             # FAISS expects a 2D np.float32 array
-            self.index.train(train_data)
+            self.index.train(train_data.reshape(-1, dim))
         else:
             # Use flat index for smaller datasets
             self.index = faiss.IndexFlatL2(dim)
@@ -367,6 +429,7 @@ class ContextAgent:
         # Search with more candidates for reranking
         search_k = min(top_k * 2, len(self.faq_data))
         # query_emb: shape (1, dim), search_k: int
+        # FAISS search
         distances, indices = self.index.search(query_emb, int(search_k))
 
         # Create search results with confidence scores
@@ -852,9 +915,13 @@ Examples:
 
     args = parser.parse_args()
 
-    # Validate arguments
+
+    # If neither --faq nor --url is provided, load all sources from sources.json
     if not args.faq and not args.url:
-        parser.error("At least one of --faq or --url must be provided")
+        logger.info("No --faq or --url provided. Loading all sources from sources.json for agentic mode.")
+        load_all_sources = True
+    else:
+        load_all_sources = False
 
     if not args.query and not args.interactive:
         parser.error("Either --query or --interactive must be provided")
@@ -868,10 +935,23 @@ Examples:
         context_agent = ContextAgent(config)
 
         # Add sources
-        if args.faq:
-            context_agent.add_source(JSONContentSource(args.faq))
-        if args.url:
-            context_agent.add_source(WebContentSource(args.url))
+        if load_all_sources:
+            try:
+                with open("sources.json", "r", encoding="utf-8") as f:
+                    sources = json.load(f)
+                    for src in sources:
+                        try:
+                            web_source = WebContentSource(src["url"])
+                            context_agent.add_source(web_source)
+                        except Exception as e:
+                            logger.warning(f"Failed to add source {src.get('name', 'Unknown')}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to load sources.json: {e}")
+        else:
+            if args.faq:
+                context_agent.add_source(JSONContentSource(args.faq))
+            if args.url:
+                context_agent.add_source(WebContentSource(args.url))
 
         if not context_agent.get_faq_data():
             logger.error("No content loaded from sources")

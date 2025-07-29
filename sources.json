@@ -11,18 +11,13 @@
   },
   {
     "name": "IISc Placements",
-    "url": "https://mgmt.iisc.ac.in/placements/",
+    "url": "https://occap.iisc.ac.in/index.php/placement-rules-students/",
     "category": ["placement", "salary", "ctc", "companies", "offers"]
   },
   {
     "name": "IISc Faculty & Research",
     "url": "https://mgmt.iisc.ac.in/faculty/",
     "category": ["faculty", "research", "projects", "phd", "supervisor", "ongoing"]
-  },
-  {
-    "name": "IISc Student Life",
-    "url": "https://mgmt.iisc.ac.in/student-life/",
-    "category": ["student life", "campus", "hostel", "accommodation", "facilities"]
   },
   {
     "name": "IISc M.Mgt Main Page",
@@ -43,10 +38,11 @@
     "name": "IISc About Us",
     "url": "https://mgmt.iisc.ac.in/about-us/",
     "category": ["about", "institute", "history", "mission"]
-  },
+  }
+  ,
   {
-    "name": "IISc Faculty Directory",
-    "url": "https://mgmt.iisc.ac.in/faculty-2/",
-    "category": ["faculty", "directory", "professors", "staff"]
+    "name": "IISc M.Mgt student Information",
+    "url": "https://mgmt.iisc.ac.in/research-student/",
+    "category": ["m.mgt",  "student life", "curriculum"]
   }
 ]
