@@ -1,24 +1,62 @@
+
+
 import json
-import argparse
 import logging
-import time
 import hashlib
-from typing import List, Dict, Any, Optional, Tuple
+import time
+import argparse
+from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
-
 import faiss
 from sentence_transformers import SentenceTransformer
-from transformers import pipeline, AutoTokenizer
+from transformers import AutoTokenizer
+from transformers.pipelines import pipeline
 import torch
-
 from webscrapper import WebScraper
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------
+# Enhanced Helper Functions
+# ---------------------------
+
+def load_sources_config(path: str = "sources.json") -> List[Dict[str, Any]]:
+    """Load the sources.json config file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load sources config: {e}")
+        return []
+
+def extract_keywords(text: str) -> set:
+    """Extract lowercase keywords from a question."""
+    return set(word.lower() for word in text.split() if len(word) > 2)
+
+def select_relevant_sources(question: str, sources: List[Dict[str, Any]], top_n: int = 2) -> List[Dict[str, Any]]:
+    """Select the most relevant sources for a question based on keyword/category overlap."""
+    qwords = extract_keywords(question)
+    scored = []
+    for src in sources:
+        cats = set()
+        for c in src.get("category", []):
+            cats.update(c.lower().split())
+        overlap = len(qwords & cats)
+        scored.append((overlap, src))
+    scored.sort(reverse=True, key=lambda x: x[0])
+    # Always return at least one source, even if no overlap
+    return [s[1] for s in scored if s[0] > 0][:top_n] or [scored[0][1]]
+
+    """Given a question, select and return WebContentSource objects for the most relevant sources."""
+    sources = load_sources_config(sources_path)
+    selected = select_relevant_sources(question, sources, top_n=max_sources)
+    return [WebContentSource(src["url"]) for src in selected]
 
 # ---------------------------
 # Configuration and Data Classes
@@ -183,6 +221,7 @@ class WebContentSource(ContentSource):
                     raise RuntimeError(
                         f"Failed to scrape content from {self.url} after {self.max_retries} attempts: {e}")
                 time.sleep(2 ** attempt)  # Exponential backoff
+        return []
 
 # ---------------------------
 # Enhanced Context Agent with Advanced Search
@@ -294,12 +333,18 @@ class ContextAgent:
             # Use IVF index for large datasets
             nlist = min(100, len(self.documents) // 10)
             self.index = faiss.IndexIVFFlat(faiss.IndexFlatL2(dim), dim, nlist)
-            self.index.train(self.doc_embeddings)
+            train_data = self.doc_embeddings.astype(np.float32)
+            assert train_data.ndim == 2, f"train_data must be 2D, got shape {train_data.shape}"
+            # FAISS expects a 2D np.float32 array
+            self.index.train(train_data)
         else:
             # Use flat index for smaller datasets
             self.index = faiss.IndexFlatL2(dim)
 
-        self.index.add(self.doc_embeddings)
+        add_data = self.doc_embeddings.astype(np.float32)
+        assert add_data.ndim == 2, f"add_data must be 2D, got shape {add_data.shape}"
+        # FAISS expects a 2D np.float32 array
+        self.index.add(add_data)
 
         build_time = time.time() - start_time
         logger.info(
@@ -315,10 +360,14 @@ class ContextAgent:
 
         # Generate query embedding
         query_emb = self.embedder.encode([query], convert_to_tensor=False)
+        query_emb = np.array(query_emb).astype(np.float32)
+        if query_emb.ndim == 1:
+            query_emb = query_emb.reshape(1, -1)
 
         # Search with more candidates for reranking
         search_k = min(top_k * 2, len(self.faq_data))
-        distances, indices = self.index.search(query_emb, search_k)
+        # query_emb: shape (1, dim), search_k: int
+        distances, indices = self.index.search(query_emb, int(search_k))
 
         # Create search results with confidence scores
         results = []
@@ -381,13 +430,15 @@ class QAAgent:
             logger.info("Falling back to context extraction mode")
             return
 
-        # Check device availability
-        if torch.cuda.is_available() and device >= 0:
-            logger.info(f"Using GPU: {torch.cuda.get_device_name(device)}")
-            self.device = device
-        else:
-            logger.info("Using CPU")
-            self.device = -1
+        # Check device availability and set device properly
+        self.device = device if (torch.cuda.is_available() and device >= 0) else -1
+        device_name = torch.cuda.get_device_name(self.device) if self.device >= 0 else "CPU"
+        logger.info(f"Using device: {device_name}")
+
+        # Set device map for pipeline initialization
+        device_map = "auto" if self.device >= 0 else None
+        torch_device = f"cuda:{self.device}" if self.device >= 0 else "cpu"
+        logger.info(f"Using device map: {device_map}, torch device: {torch_device}")
 
         # Initialize Qwen2.5 generation pipeline
         try:
@@ -395,7 +446,8 @@ class QAAgent:
                 "text-generation",
                 model="Qwen/Qwen2.5-0.5B-Instruct",
                 tokenizer=self.tokenizer,
-                device=self.device,
+                device_map=device_map,  # Use device_map for better GPU utilization
+                torch_dtype=torch.float16 if self.device >= 0 else None,  # Use FP16 on GPU
                 max_new_tokens=self.config.max_new_tokens,
                 temperature=self.config.temperature,
                 top_p=self.config.top_p,
@@ -419,7 +471,7 @@ class QAAgent:
             return len(self.tokenizer.encode(text, add_special_tokens=True))
         except:
             # Fallback: rough estimation
-            return len(text.split()) * 1.3
+            return int(len(text.split()) * 1.3)
 
     def _create_qwen_prompt(self, query: str, context: str) -> str:
         """Create a proper prompt for Qwen2.5 model"""
@@ -827,7 +879,8 @@ Examples:
 
         # Build semantic index
         logger.info("Loading embedding model...")
-        embedder = SentenceTransformer('all-MiniLM-L6-v2')
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        embedder = SentenceTransformer('all-MiniLM-L6-v2', device=device)
         context_agent.build_semantic_search_index(embedder)
 
         # Initialize QA agent with Qwen2.5
