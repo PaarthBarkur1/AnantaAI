@@ -4,5 +4,6 @@ streamlit run app.py
 
 
 command to run
- I may have fucked your webscraping agent tho, gotta have it search by default to fix goodnight
+Webscrapper fixed, works like a charm. does have a tendency to over rely on occap ka website coz it has the most info
+
  
