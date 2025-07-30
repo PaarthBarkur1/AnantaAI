@@ -72,12 +72,14 @@ Access the application at `http://localhost:8501`
 
 1. **Start the backend server**
 ```bash
-python -m backend.main
+cd .. 
+python -m AnantAI.backend.main
 ```
 
 2. **Start the frontend development server**
 ```bash
 cd frontend
+npm install @tailwindcss/forms --save-dev
 npm run dev
 ```
 
