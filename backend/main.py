@@ -1,17 +1,19 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-import uvicorn
+from sentence_transformers import SentenceTransformer
+from AnantaAI.backend.qna import ContextAgent, QAAgent, QAConfig, JSONContentSource, WebContentSource
 import json
-from qna import ContextAgent, QAAgent, SentenceTransformer, QAConfig, JSONContentSource, WebContentSource
+import uvicorn
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException
 
 app = FastAPI(title="IISc M.Mgt QA API")
 
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development only, configure properly in production
+    # For development only, configure properly in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,10 +26,13 @@ context_agent = ContextAgent(config)
 # Add data sources
 try:
     # Add JSON FAQ source
-    context_agent.add_source(JSONContentSource("context.json"))
+    import os
+    CONTEXT_PATH = os.path.join(os.path.dirname(__file__), "context.json")
+    context_agent.add_source(JSONContentSource(CONTEXT_PATH))
 
     # Add web sources
-    with open("sources.json", 'r', encoding='utf-8') as f:
+    SOURCES_PATH = os.path.join(BASE_DIR, "sources.json")
+    with open(SOURCES_PATH, 'r', encoding='utf-8') as f:
         web_sources = json.load(f)
 
     for source in web_sources:
@@ -35,7 +40,8 @@ try:
             web_source = WebContentSource(source["url"])
             context_agent.add_source(web_source)
         except Exception as e:
-            print(f"Failed to add web source {source.get('name', 'Unknown')}: {e}")
+            print(
+                f"Failed to add web source {source.get('name', 'Unknown')}: {e}")
             continue
 
 except Exception as e:
@@ -46,9 +52,11 @@ embedder = SentenceTransformer("all-MiniLM-L6-v2")
 context_agent.build_semantic_search_index(embedder)
 qa_agent = QAAgent(device=-1, config=config)  # Use CPU by default
 
+
 class Query(BaseModel):
     text: str
     max_results: Optional[int] = 3
+
 
 class QAResponse(BaseModel):
     answer: str
@@ -56,10 +64,12 @@ class QAResponse(BaseModel):
     sources: List[Dict[str, Any]]
     processing_time: float
 
+
 @app.post("/api/query", response_model=QAResponse)
 async def process_query(query: Query):
     try:
-        result = qa_agent.process_query(query.text, context_agent, top_k=query.max_results)
+        result = qa_agent.process_query(
+            query.text, context_agent, top_k=query.max_results)
         return {
             "answer": result["answer"],
             "confidence": result.get("confidence", 0.0),
@@ -68,6 +78,7 @@ async def process_query(query: Query):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/categories")
 async def get_categories():
@@ -82,4 +93,5 @@ async def get_categories():
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("AnantaAI.backend.main:app",
+                host="0.0.0.0", port=8000, reload=True)

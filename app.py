@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, Tuple, List
 import uuid
 
 # --- project imports ---------------------------------------------------------
-from qna import (
+from AnantaAI.backend.qna import (
     ContextAgent,
     JSONContentSource,
     WebContentSource,
@@ -19,7 +19,7 @@ from qna import (
     SentenceTransformer,
     QAConfig,
 )
-from faq_data import FAQ_DATA
+from AnantaAI.backend.faq_data import FAQ_DATA
 
 # --- enhanced logging -------------------------------------------------------
 # Configure root logger to only show WARNING and above
@@ -151,7 +151,7 @@ def log_step(message: str, success: bool = True):
     status = "✓" if success else "✗"
     log_entry = f"[{timestamp}] {status} {message}"
     st.session_state.initialization_logs.append(log_entry)
-    
+
     # Only log important information to terminal
     if not success:
         logger.error(message)
@@ -351,7 +351,7 @@ def initialize():
         log_step("ContextAgent created successfully")
 
         sources_added = 0
-        
+
         # Add JSON FAQ source
         try:
             agent.add_source(JSONContentSource(CONFIG["faq_file"]))
@@ -364,20 +364,24 @@ def initialize():
         try:
             with open(CONFIG["sources_file"], 'r', encoding='utf-8') as f:
                 web_sources = json.load(f)
-            log_step(f"Found {len(web_sources)} web sources in {CONFIG['sources_file']}")
-            
+            log_step(
+                f"Found {len(web_sources)} web sources in {CONFIG['sources_file']}")
+
             for source in web_sources:
                 try:
                     web_source = WebContentSource(source["url"])
                     agent.add_source(web_source)
-                    log_step(f"Web source added: {source['name']} ({source['url']})")
+                    log_step(
+                        f"Web source added: {source['name']} ({source['url']})")
                     sources_added += 1
                 except Exception as e:
-                    log_step(f"Failed to add web source {source.get('name', 'Unknown')}: {e}", False)
+                    log_step(
+                        f"Failed to add web source {source.get('name', 'Unknown')}: {e}", False)
                     continue
-                    
+
         except Exception as e:
-            log_step(f"Failed to load web sources from {CONFIG['sources_file']}: {e}", False)
+            log_step(
+                f"Failed to load web sources from {CONFIG['sources_file']}: {e}", False)
 
         if sources_added == 0:
             raise RuntimeError("No data sources available")

@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 import hashlib
@@ -15,7 +13,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer
 from transformers.pipelines import pipeline
 import torch
-from webscrapper import WebScraper
+from AnantaAI.backend.webscrapper import WebScraper
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,9 +33,11 @@ def load_sources_config(path: str = "sources.json") -> List[Dict[str, Any]]:
         logger.error(f"Failed to load sources config: {e}")
         return []
 
+
 def extract_keywords(text: str) -> set:
     """Extract lowercase keywords from a question."""
     return set(word.lower() for word in text.split() if len(word) > 2)
+
 
 def select_relevant_sources(question: str, sources: List[Dict[str, Any]], top_n: int = 2) -> List[Dict[str, Any]]:
     """Select the most relevant sources for a question based on keyword/category overlap."""
@@ -52,7 +52,6 @@ def select_relevant_sources(question: str, sources: List[Dict[str, Any]], top_n:
     scored.sort(reverse=True, key=lambda x: x[0])
     # Always return at least one source, even if no overlap
     return [s[1] for s in scored if s[0] > 0][:top_n] or [scored[0][1]]
-
 
 
 # ---------------------------
@@ -189,7 +188,8 @@ class WebContentSource(ContentSource):
 
         for attempt in range(self.max_retries):
             try:
-                logger.info(f"Scraping content from {self.url} (attempt {attempt + 1})")
+                logger.info(
+                    f"Scraping content from {self.url} (attempt {attempt + 1})")
                 content = []
 
                 # Get paragraphs with main content
@@ -225,7 +225,8 @@ class WebContentSource(ContentSource):
                 tables = self.scraper.scrape_table_data(self.url)
                 for i, table in enumerate(tables):
                     if table:  # Only process non-empty tables
-                        table_content = "\n".join([" | ".join(row) for row in table])
+                        table_content = "\n".join(
+                            [" | ".join(row) for row in table])
                         content.append({
                             "question": f"Table Content {i + 1}",
                             "answer": table_content,
@@ -239,7 +240,8 @@ class WebContentSource(ContentSource):
 
                 # Get WordPress recent posts if available
                 try:
-                    recent_posts = self.scraper.scrape_wordpress_recent_posts(self.url)
+                    recent_posts = self.scraper.scrape_wordpress_recent_posts(
+                        self.url)
                     for i, post in enumerate(recent_posts):
                         content.append({
                             "question": f"Recent Post {i + 1}",
@@ -252,11 +254,13 @@ class WebContentSource(ContentSource):
                             }
                         })
                 except Exception as wp_error:
-                    logger.debug(f"Not a WordPress site or no recent posts: {wp_error}")
+                    logger.debug(
+                        f"Not a WordPress site or no recent posts: {wp_error}")
 
                 # Try specific content areas if no content found yet
                 if not content:
-                    specific_content = self.scraper.scrape_specific_element(self.url, "div.entry-content, article, .content-area")
+                    specific_content = self.scraper.scrape_specific_element(
+                        self.url, "div.entry-content, article, .content-area")
                     for i, text in enumerate(specific_content):
                         if text.strip() and len(text.strip()) > 50:
                             content.append({
@@ -273,7 +277,8 @@ class WebContentSource(ContentSource):
                 if not content:
                     raise ValueError("No content found at URL")
 
-                logger.info(f"Successfully scraped {len(content)} items from {self.url}")
+                logger.info(
+                    f"Successfully scraped {len(content)} items from {self.url}")
                 self._cache = content
                 return content
 
@@ -494,14 +499,17 @@ class QAAgent:
             return
 
         # Check device availability and set device properly
-        self.device = device if (torch.cuda.is_available() and device >= 0) else -1
-        device_name = torch.cuda.get_device_name(self.device) if self.device >= 0 else "CPU"
+        self.device = device if (
+            torch.cuda.is_available() and device >= 0) else -1
+        device_name = torch.cuda.get_device_name(
+            self.device) if self.device >= 0 else "CPU"
         logger.info(f"Using device: {device_name}")
 
         # Set device map for pipeline initialization
         device_map = "auto" if self.device >= 0 else None
         torch_device = f"cuda:{self.device}" if self.device >= 0 else "cpu"
-        logger.info(f"Using device map: {device_map}, torch device: {torch_device}")
+        logger.info(
+            f"Using device map: {device_map}, torch device: {torch_device}")
 
         # Initialize Qwen2.5 generation pipeline
         try:
@@ -915,10 +923,10 @@ Examples:
 
     args = parser.parse_args()
 
-
     # If neither --faq nor --url is provided, load all sources from sources.json
     if not args.faq and not args.url:
-        logger.info("No --faq or --url provided. Loading all sources from sources.json for agentic mode.")
+        logger.info(
+            "No --faq or --url provided. Loading all sources from sources.json for agentic mode.")
         load_all_sources = True
     else:
         load_all_sources = False
@@ -944,7 +952,8 @@ Examples:
                             web_source = WebContentSource(src["url"])
                             context_agent.add_source(web_source)
                         except Exception as e:
-                            logger.warning(f"Failed to add source {src.get('name', 'Unknown')}: {e}")
+                            logger.warning(
+                                f"Failed to add source {src.get('name', 'Unknown')}: {e}")
             except Exception as e:
                 logger.error(f"Failed to load sources.json: {e}")
         else:
