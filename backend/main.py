@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import uvicorn
-from qna import ContextAgent, QAAgent, SentenceTransformer, QAConfig
+import json
+from qna import ContextAgent, QAAgent, SentenceTransformer, QAConfig, JSONContentSource, WebContentSource
 
 app = FastAPI(title="IISc M.Mgt QA API")
 
@@ -19,6 +20,28 @@ app.add_middleware(
 # Initialize QA system
 config = QAConfig()
 context_agent = ContextAgent(config)
+
+# Add data sources
+try:
+    # Add JSON FAQ source
+    context_agent.add_source(JSONContentSource("context.json"))
+
+    # Add web sources
+    with open("sources.json", 'r', encoding='utf-8') as f:
+        web_sources = json.load(f)
+
+    for source in web_sources:
+        try:
+            web_source = WebContentSource(source["url"])
+            context_agent.add_source(web_source)
+        except Exception as e:
+            print(f"Failed to add web source {source.get('name', 'Unknown')}: {e}")
+            continue
+
+except Exception as e:
+    print(f"Error loading data sources: {e}")
+
+# Build semantic index
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 context_agent.build_semantic_search_index(embedder)
 qa_agent = QAAgent(device=-1, config=config)  # Use CPU by default
