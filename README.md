@@ -72,8 +72,7 @@ Access the application at `http://localhost:8501`
 
 1. **Start the backend server**
 ```bash
-cd backend
-python main.py
+python -m backend.main
 ```
 
 2. **Start the frontend development server**
