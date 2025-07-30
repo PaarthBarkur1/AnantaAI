@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  ananta-ai:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    
+  backend-api:
+    build: .
+    command: python backend/main.py
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
