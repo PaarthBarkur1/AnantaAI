@@ -1,29 +1,45 @@
 @echo off
-REM AnantaAI Startup Script for Windows
+REM AnantaAI Full Stack Startup Script for Windows
 
-echo 🚀 Starting AnantaAI - IISc M.Mgt QA System
+echo 🚀 Starting AnantaAI - IISc M.Mgt QA System (Full Stack)
 
-REM Check if virtual environment exists
-if not exist "venv" (
-    echo 📦 Creating virtual environment...
-    python -m venv venv
-)
+REM Step 1: Go to parent folder
+echo 📁 Moving to parent directory...
+cd ..
 
-REM Activate virtual environment
-echo 🔧 Activating virtual environment...
-call venv\Scripts\activate
+REM Step 2: Start backend in background
+echo 🔧 Starting backend server...
+start "AnantaAI Backend" cmd /k "python -m AnantaAI.backend.main"
 
-REM Install/update dependencies
-echo 📥 Installing dependencies...
-pip install -r requirements.txt
+REM Give backend time to start
+timeout /t 3 /nobreak >nul
 
-REM Check if models need to be downloaded
-echo 🤖 Checking AI models...
-python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+REM Step 3: Navigate to frontend directory
+echo 📱 Setting up frontend...
+cd AnantaAI\frontend
 
-REM Start the application
-echo 🌟 Starting Streamlit application...
-echo 📍 Access the app at: http://localhost:8501
-echo 🛑 Press Ctrl+C to stop
+REM Step 4: Install npm dependencies
+echo 📥 Installing npm dependencies...
+call npm install
 
-streamlit run app.py
+REM Step 5: Install additional Tailwind packages
+echo 🎨 Installing Tailwind CSS packages...
+call npm install @tailwindcss/forms @tailwindcss/typography @tailwindcss/aspect-ratio --save-dev
+
+REM Step 6: Start frontend development server
+echo 🌟 Starting frontend development server...
+echo.
+echo 🎯 Services starting:
+echo    📡 Backend API: http://localhost:8000
+echo    🖥️  Frontend: http://localhost:5173
+echo.
+echo 🛑 Close this window or press Ctrl+C to stop frontend
+echo 🛑 Close the backend window to stop the API server
+echo.
+
+REM Start frontend (this will run in foreground)
+call npm run dev
+
+echo.
+echo 👋 Frontend stopped. Backend may still be running in separate window.
+pause

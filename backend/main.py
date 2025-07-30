@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException
+import os
 
 app = FastAPI(title="IISc M.Mgt QA API")
 
@@ -31,7 +32,7 @@ try:
     context_agent.add_source(JSONContentSource(CONTEXT_PATH))
 
     # Add web sources
-    SOURCES_PATH = os.path.join(BASE_DIR, "sources.json")
+    SOURCES_PATH = os.path.join(os.path.dirname(__file__), "sources.json")
     with open(SOURCES_PATH, 'r', encoding='utf-8') as f:
         web_sources = json.load(f)
 
