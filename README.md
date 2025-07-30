@@ -72,7 +72,7 @@ Access the application at `http://localhost:8501`
 
 1. **Start the backend server**
 ```bash
-cd .. 
+cd .. #Just go to the root folder containing AnantAI repo
 python -m AnantAI.backend.main
 ```
 
