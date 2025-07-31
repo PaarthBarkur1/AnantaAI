@@ -3,30 +3,37 @@ REM AnantaAI Full Stack Startup Script for Windows
 
 echo 🚀 Starting AnantaAI - IISc M.Mgt QA System (Full Stack)
 
-REM Step 1: Go to parent folder
-echo 📁 Moving to parent directory...
-cd ..
+REM Check if virtual environment exists and activate it
+if exist "venv" (
+    echo 🔧 Activating virtual environment...
+    call venv\Scripts\activate
+) else (
+    echo ⚠️  Virtual environment not found!
+    echo    Please run: python setup_venv.py
+    pause
+    exit /b 1
+)
 
-REM Step 2: Start backend in background
+REM Step 1: Start backend in background
 echo 🔧 Starting backend server...
-start "AnantaAI Backend" cmd /k "python -m AnantaAI.backend.main"
+start "AnantaAI Backend" cmd /k "cd backend && python main.py"
 
 REM Give backend time to start
 timeout /t 3 /nobreak >nul
 
-REM Step 3: Navigate to frontend directory
+REM Step 2: Navigate to frontend directory
 echo 📱 Setting up frontend...
-cd AnantaAI\frontend
+cd frontend
 
-REM Step 4: Install npm dependencies
+REM Step 3: Install npm dependencies
 echo 📥 Installing npm dependencies...
 call npm install
 
-REM Step 5: Install additional Tailwind packages
+REM Step 4: Install additional Tailwind packages
 echo 🎨 Installing Tailwind CSS packages...
 call npm install @tailwindcss/forms @tailwindcss/typography @tailwindcss/aspect-ratio --save-dev
 
-REM Step 6: Start frontend development server
+REM Step 5: Start frontend development server
 echo 🌟 Starting frontend development server...
 echo.
 echo 🎯 Services starting:
