@@ -13,7 +13,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer
 from transformers.pipelines import pipeline
 import torch
-from webscrapper import WebScraper
+from .webscrapper import WebScraper
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

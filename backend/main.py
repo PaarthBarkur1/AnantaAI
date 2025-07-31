@@ -8,8 +8,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
-from qna import ContextAgent, QAAgent, QAConfig, JSONContentSource, WebContentSource
-from faq_data import FAQ_DATA
+from .qna import ContextAgent, QAAgent, QAConfig, JSONContentSource, WebContentSource
+from .faq_data import FAQ_DATA
 
 
 def convert_numpy_types(obj):
