@@ -234,7 +234,7 @@ export function Suggestions({ onSelect }: SuggestionsProps) {
           ].map((action, index) => (
             <button
               key={index}
-              onClick={() => onSelect(action.text)}
+              onClick={() => onSelect(action.text, undefined)}
               className="flex items-center space-x-2 px-4 py-2 bg-slate-700/80 hover:bg-blue-900/30 rounded-full border border-slate-600/30 hover:border-blue-400/50 transition-all duration-200 text-sm text-slate-300 hover:text-blue-300"
             >
               <span>{action.icon}</span>

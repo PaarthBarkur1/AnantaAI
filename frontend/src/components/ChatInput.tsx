@@ -14,7 +14,7 @@ export function ChatInput({ onSubmit, disabled }: ChatInputProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (text.trim()) {
-      onSubmit(text)
+      onSubmit(text, undefined)  // Pass undefined for prewritten answer
       setText('')
     }
   }
@@ -88,7 +88,11 @@ export function ChatInput({ onSubmit, disabled }: ChatInputProps) {
                 <button
                   key={index}
                   type="button"
-                  onClick={() => setText(suggestion)}
+                  onClick={() => {
+                    onSubmit(suggestion, undefined)
+                    setText('')
+                    setShowSuggestions(false)
+                  }}
                   className="px-3 py-1.5 text-sm bg-slate-700/80 hover:bg-slate-600/80 rounded-full text-slate-300 transition-colors duration-200"
                 >
                   {suggestion}

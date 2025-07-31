@@ -68,11 +68,11 @@ class QAConfig:
     """Configuration class for QA system"""
     max_length: int = 1024
     max_new_tokens: int = 256
-    temperature: float = 0.7
-    top_p: float = 0.95
+    temperature: float = 0.3  # Balanced - not too rigid, not too creative
+    top_p: float = 0.8  # Allow some variety in responses
     do_sample: bool = True
     context_window: int = 800
-    min_confidence: float = 0.1
+    min_confidence: float = 0.05  # Lower threshold for better recall
 
 
 @dataclass
@@ -329,8 +329,11 @@ class ContextAgent:
     def get_source_confidence(self, source_type: str) -> float:
         """Get confidence score based on source type"""
         confidence_scores = {
-            "json": 0.95,
-            "web": 0.75,
+            "json": 1.0,   # Maximum confidence for curated FAQ data
+            "web": 0.75,   # Lower confidence for web content
+            "official": 0.85,  # High confidence for official sources
+            "faq": 1.0,    # Maximum confidence for FAQ content
+            "unknown": 0.5  # Lower confidence for unknown sources
         }
         return confidence_scores.get(source_type, 0.5)
 
@@ -417,16 +420,46 @@ class ContextAgent:
         logger.info(
             f"Built semantic index with {len(self.documents)} documents in {build_time:.2f}s")
 
+    def _preprocess_query(self, query: str) -> str:
+        """Preprocess query to improve matching"""
+        # Convert to lowercase for processing
+        query_lower = query.lower()
+
+        # Expand common synonyms and related terms
+        synonyms = {
+            "admission requirements": "eligibility criteria application requirements",
+            "admission": "eligibility application",
+            "requirements": "criteria eligibility",
+            "apply": "application admission",
+            "fees": "cost tuition expenses",
+            "placement": "jobs career recruitment",
+            "curriculum": "courses subjects syllabus",
+            "duration": "length time period",
+            "internship": "summer placement industry exposure"
+        }
+
+        # Add synonyms to expand query
+        expanded_query = query
+        for term, expansion in synonyms.items():
+            if term in query_lower:
+                expanded_query += " " + expansion
+
+        return expanded_query
+
     def search(self, query: str, top_k: int = 5) -> List[SearchResult]:
-        """Enhanced search with confidence scoring"""
+        """Enhanced search with confidence scoring and query preprocessing"""
         if self.index is None or self.embedder is None:
             raise RuntimeError(
                 "Semantic index not built. Call build_semantic_search_index() first.")
 
         start_time = time.time()
 
+        # Preprocess query for better matching
+        expanded_query = self._preprocess_query(query)
+
         # Generate query embedding
-        query_emb = self.embedder.encode([query], convert_to_tensor=False)
+        query_emb = self.embedder.encode(
+            [expanded_query], convert_to_tensor=False)
         query_emb = np.array(query_emb).astype(np.float32)
         if query_emb.ndim == 1:
             query_emb = query_emb.reshape(1, -1)
@@ -445,9 +478,19 @@ class ContextAgent:
                 source_type = entry.get(
                     "metadata", {}).get("source", "unknown")
 
-                # Calculate confidence (convert L2 distance to similarity)
-                similarity = 1 / (1 + distance)
+                # Calculate confidence (improved scoring with JSON boost)
+                # Convert L2 distance to similarity with better scaling
+                # More generous similarity
+                similarity = max(0.0, 1.0 - (distance / 1.5))
                 source_confidence = self.get_source_confidence(source_type)
+
+                # Extra boost for JSON sources (exact FAQ data)
+                if source_type == "json":
+                    # 25% boost for JSON (reduced from 50%)
+                    similarity = min(1.0, similarity * 1.25)
+                elif distance < 0.3:  # Very close matches
+                    similarity = min(1.0, similarity * 1.2)
+
                 combined_confidence = similarity * source_confidence
 
                 results.append(SearchResult(
@@ -499,35 +542,55 @@ class QAAgent:
             return
 
         # Check device availability and set device properly
-        self.device = device if (
-            torch.cuda.is_available() and device >= 0) else -1
-        device_name = torch.cuda.get_device_name(
-            self.device) if self.device >= 0 else "CPU"
-        logger.info(f"Using device: {device_name}")
+        if device >= 0 and torch.cuda.is_available():
+            self.device = device
+            device_name = torch.cuda.get_device_name(self.device)
+            gpu_memory = torch.cuda.get_device_properties(
+                self.device).total_memory / 1024**3
+            logger.info(f"Using GPU: {device_name} ({gpu_memory:.1f}GB)")
+            print(f"✓ Using GPU: {device_name} ({gpu_memory:.1f}GB)")
+        else:
+            self.device = -1
+            logger.info("Using CPU for model inference")
+            print("✓ Using CPU for model inference")
 
         # Set device map for pipeline initialization
         device_map = "auto" if self.device >= 0 else None
         torch_device = f"cuda:{self.device}" if self.device >= 0 else "cpu"
-        logger.info(
-            f"Using device map: {device_map}, torch device: {torch_device}")
+        logger.info(f"Device map: {device_map}, torch device: {torch_device}")
 
         # Initialize Qwen2.5 generation pipeline
         try:
-            self.generator = pipeline(
-                "text-generation",
-                model="Qwen/Qwen2.5-0.5B-Instruct",
-                tokenizer=self.tokenizer,
-                device_map=device_map,  # Use device_map for better GPU utilization
-                torch_dtype=torch.float16 if self.device >= 0 else None,  # Use FP16 on GPU
-                max_new_tokens=self.config.max_new_tokens,
-                temperature=self.config.temperature,
-                top_p=self.config.top_p,
-                do_sample=self.config.do_sample,
-                pad_token_id=self.tokenizer.pad_token_id,
-                eos_token_id=self.tokenizer.eos_token_id,
-                return_full_text=False,
-                trust_remote_code=True  # Required for Qwen models
-            )
+            pipeline_kwargs = {
+                "task": "text-generation",
+                "model": "Qwen/Qwen2.5-0.5B-Instruct",
+                "tokenizer": self.tokenizer,
+                "max_new_tokens": self.config.max_new_tokens,
+                "temperature": self.config.temperature,
+                "top_p": self.config.top_p,
+                "do_sample": self.config.do_sample,
+                "pad_token_id": self.tokenizer.pad_token_id,
+                "eos_token_id": self.tokenizer.eos_token_id,
+                "return_full_text": False,
+                "trust_remote_code": True  # Required for Qwen models
+            }
+
+            # Add GPU-specific optimizations
+            if self.device >= 0:
+                pipeline_kwargs.update({
+                    "device_map": "auto",  # Automatic GPU placement
+                    "torch_dtype": torch.float16,  # Use FP16 for faster inference
+                    "model_kwargs": {
+                        "low_cpu_mem_usage": True  # Reduce CPU memory usage
+                        # Removed duplicate torch_dtype from model_kwargs
+                    }
+                })
+                print("✓ Using GPU optimizations (FP16, auto device mapping)")
+            else:
+                pipeline_kwargs["device"] = "cpu"
+                print("✓ Using CPU inference")
+
+            self.generator = pipeline(**pipeline_kwargs)
             self.use_ai_generation = True
             logger.info(
                 "Successfully initialized Qwen2.5 model for text generation")
@@ -545,16 +608,24 @@ class QAAgent:
             return int(len(text.split()) * 1.3)
 
     def _create_qwen_prompt(self, query: str, context: str) -> str:
-        """Create a proper prompt for Qwen2.5 model"""
+        """Create a proper prompt for Qwen2.5 model with professional, concise style"""
         return f"""<|im_start|>system
-You are a helpful assistant answering questions about the IISc M.Mgt program. Provide clear, accurate answers based on the given context.
+You are a professional admissions advisor for the IISc M.Mgt program. Provide clear, accurate, and concise answers based on the given context.
+
+Guidelines:
+- Be direct and professional
+- Answer the specific question asked
+- Use bullet points for lists when appropriate
+- Keep responses focused and to the point
+- Include only relevant information from the context
+- Avoid unnecessary elaboration or fluff
 <|im_end|>
 <|im_start|>user
-Context: {context[:600]}
+Context: {context[:800]}
 
 Question: {query}
 
-Please provide a clear and concise answer based on the context above.
+Provide a clear, professional answer:
 <|im_end|>
 <|im_start|>assistant
 """
@@ -573,6 +644,40 @@ Please provide a clear and concise answer based on the context above.
             text += '.'
 
         return text
+
+    def _validate_answer_grounding(self, answer: str, context: str) -> bool:
+        """Check if the answer is reasonable and not obviously hallucinated"""
+        if not answer or not context:
+            return False
+
+        # Very basic validation - just check for obvious issues
+        answer_lower = answer.lower()
+
+        # Reject answers that are clearly problematic
+        problematic_phrases = [
+            "i am an ai",
+            "i cannot",
+            "as an ai",
+            "i don't know",
+            "sorry, i cannot"
+        ]
+
+        # If answer contains problematic phrases, reject
+        if any(phrase in answer_lower for phrase in problematic_phrases):
+            return False
+
+        # Check if answer is too short or too generic
+        if len(answer.split()) < 5:
+            return False
+
+        # Basic check - answer should have some overlap with context
+        answer_words = set(answer_lower.split())
+        context_words = set(context.lower().split())
+        overlap = len(answer_words.intersection(context_words))
+        overlap_ratio = overlap / len(answer_words) if answer_words else 0
+
+        # Very lenient threshold - just catch obvious hallucinations
+        return overlap_ratio > 0.15
 
     def _extract_relevant_sentences(self, query: str, text: str, max_sentences: int = 4) -> str:
         """Extract the most relevant sentences from a large text block"""
@@ -651,13 +756,14 @@ Please provide a clear and concise answer based on the context above.
                 context = context[:400] + "..."
                 prompt = self._create_qwen_prompt(query, context)
 
-            # Generate with Qwen
+            # Generate with Qwen (professional, focused settings)
             outputs = self.generator(
                 prompt,
                 max_new_tokens=min(150, self.config.max_new_tokens),
-                temperature=0.3,  # Lower temperature for more focused answers
-                top_p=0.8,
+                temperature=0.2,  # Lower for more focused, professional responses
+                top_p=0.75,  # More focused word choice
                 do_sample=True,
+                repetition_penalty=1.05,  # Slightly higher to avoid repetition
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id
             )
@@ -666,8 +772,10 @@ Please provide a clear and concise answer based on the context above.
                 generated_text = outputs[0].get("generated_text", "")
                 cleaned_answer = self._clean_qwen_output(generated_text)
 
-                # Validate the output
-                if len(cleaned_answer) > 10 and cleaned_answer.count(' ') > 3:
+                # Validate the output length and quality
+                if (len(cleaned_answer) > 10 and
+                    cleaned_answer.count(' ') > 3 and
+                        self._validate_answer_grounding(cleaned_answer, context)):
                     return cleaned_answer
 
         except Exception as e:
@@ -760,8 +868,29 @@ Please provide a clear and concise answer based on the context above.
                 })
 
             combined_context = "\n\n".join(focused_contexts[:2])
-            avg_confidence = sum(
-                r.confidence for r in search_results) / len(search_results)
+
+            # Improved confidence calculation
+            # Weight by position (first results are more important)
+            weighted_confidence = 0
+            total_weight = 0
+            for i, result in enumerate(search_results[:3]):
+                weight = 1.0 / (i + 1)  # 1.0, 0.5, 0.33...
+                weighted_confidence += result.confidence * weight
+                total_weight += weight
+
+            avg_confidence = weighted_confidence / total_weight if total_weight > 0 else 0
+
+            # Boost confidence if we have multiple good matches or JSON sources
+            good_matches = [r for r in search_results if r.confidence > 0.7]
+            json_sources = [r for r in search_results if r.content.get(
+                "metadata", {}).get("source") == "json"]
+
+            if len(good_matches) >= 2:
+                avg_confidence = min(1.0, avg_confidence * 1.2)
+            elif len(json_sources) >= 1:
+                # Extra boost for JSON sources (exact FAQ data) - reduced
+                avg_confidence = min(1.0, avg_confidence * 1.15)
+
             processing_time = time.time() - start_time
 
             generation_method = "qwen_ai_generation" if self.use_ai_generation else "section_extraction"

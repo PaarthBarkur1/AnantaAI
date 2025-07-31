@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChatInput } from './components/ChatInput'
 import { Answer } from './components/Answer'
 import { Suggestions } from './components/Suggestions'
@@ -8,15 +8,13 @@ import { ErrorMessage } from './components/ErrorMessage'
 import { useQA } from './hooks/useQA'
 
 function App() {
-  const [query, setQuery] = useState('')
   const [conversationHistory, setConversationHistory] = useState<Array<{query: string, answer: any}>>([])
-  const { answer, loading, error, sendQuery } = useQA()
+  const { answer, loading, error, sendQuery, setAnswer } = useQA()
+  const currentQueryRef = useRef<string>('')
 
   const handleSubmit = async (text: string, prewrittenAnswer?: string) => {
-    setQuery(text)
-
     if (prewrittenAnswer) {
-      // Use prewritten answer for popular topics
+      // Use prewritten answer - add directly to history
       const mockAnswer = {
         answer: prewrittenAnswer,
         confidence: 1.0,
@@ -26,15 +24,18 @@ function App() {
       setConversationHistory(prev => [...prev, { query: text, answer: mockAnswer }])
     } else {
       // Use backend for custom queries
+      currentQueryRef.current = text
       await sendQuery(text)
     }
   }
 
+  // Add backend responses to history when they arrive
   useEffect(() => {
-    if (answer && query && !conversationHistory.some(item => item.query === query && item.answer === answer)) {
-      setConversationHistory(prev => [...prev, { query, answer }])
+    if (answer && currentQueryRef.current) {
+      setConversationHistory(prev => [...prev, { query: currentQueryRef.current, answer }])
+      currentQueryRef.current = '' // Clear after adding
     }
-  }, [answer, query, conversationHistory])
+  }, [answer])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-700 to-blue-900">
@@ -86,11 +87,11 @@ function App() {
         )}
 
         {/* Current loading state */}
-        {loading && (
+        {loading && currentQueryRef.current && (
           <div className="flex justify-end mb-4">
             <div className="max-w-3xl bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl rounded-tr-md px-6 py-4 shadow-lg">
               <p className="text-sm font-medium mb-1">You</p>
-              <p>{query}</p>
+              <p>{currentQueryRef.current}</p>
             </div>
           </div>
         )}
@@ -101,13 +102,13 @@ function App() {
         {error && (
           <ErrorMessage
             error={error}
-            onRetry={() => query && sendQuery(query)}
+            onRetry={() => currentQueryRef.current && sendQuery(currentQueryRef.current)}
           />
         )}
 
         {/* Current answer (if not in history yet) */}
-        {answer && !conversationHistory.some(item => item.query === query && item.answer === answer) && (
-          <Answer answer={answer} query={query} />
+        {answer && currentQueryRef.current && !conversationHistory.some(item => item.query === currentQueryRef.current && item.answer === answer) && (
+          <Answer answer={answer} query={currentQueryRef.current} />
         )}
 
         {/* Chat input - always at bottom */}
