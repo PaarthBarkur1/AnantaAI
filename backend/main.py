@@ -2,12 +2,14 @@ import os
 import json
 import uvicorn
 import numpy as np
+import torch
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from qna import ContextAgent, QAAgent, QAConfig, JSONContentSource, WebContentSource
+from faq_data import FAQ_DATA
 
 
 def convert_numpy_types(obj):
@@ -51,6 +53,25 @@ try:
     CONTEXT_PATH = os.path.join(script_dir, "context.json")
     context_agent.add_source(JSONContentSource(CONTEXT_PATH))
 
+    # Add structured FAQ data from faq_data.py
+    print("Loading structured FAQ data...")
+    faq_count = 0
+    for category, questions in FAQ_DATA.items():
+        for question, answer in questions.items():
+            faq_entry = {
+                "question": question,
+                "answer": answer.strip(),
+                "metadata": {
+                    "source": "json",
+                    "category": category,
+                    "type": "faq"
+                }
+            }
+            context_agent.faq_data.append(faq_entry)
+            faq_count += 1
+
+    print(f"Loaded {faq_count} FAQ entries from {len(FAQ_DATA)} categories")
+
     # Add web sources
     SOURCES_PATH = os.path.join(script_dir, "sources.json")
     with open(SOURCES_PATH, 'r', encoding='utf-8') as f:
@@ -68,10 +89,37 @@ try:
 except Exception as e:
     print(f"Error loading data sources: {e}")
 
+# Auto-detect best device for models
+
+
+def get_best_device():
+    """Auto-detect the best available device"""
+    if torch.cuda.is_available():
+        device = 0  # Use first GPU
+        print(f"GPU detected: {torch.cuda.get_device_name(0)}")
+        return device
+    else:
+        print("No GPU detected, using CPU")
+        return -1
+
+
 # Build semantic index
+print("Loading sentence transformer model...")
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Move sentence transformer to GPU if available
+if torch.cuda.is_available():
+    embedder = embedder.to('cuda')
+    print("Moved sentence transformer to GPU")
+else:
+    print("Using sentence transformer on CPU")
+
 context_agent.build_semantic_search_index(embedder)
-qa_agent = QAAgent(device=-1, config=config)  # Use CPU by default
+
+# Initialize QA agent with auto-detected device
+device = get_best_device()
+print(f"Initializing QA agent on device: {'GPU' if device >= 0 else 'CPU'}")
+qa_agent = QAAgent(device=device, config=config)
 
 
 class Query(BaseModel):

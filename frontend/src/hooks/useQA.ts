@@ -41,6 +41,7 @@ export function useQA() {
     loading,
     error,
     answer,
-    sendQuery
+    sendQuery,
+    setAnswer
   }
 }
