@@ -14,21 +14,33 @@ cleanup() {
 # Set trap to cleanup on script exit
 trap cleanup SIGINT SIGTERM EXIT
 
+# Check if virtual environment exists and activate it
+if [ -d "venv" ]; then
+    echo "🔧 Activating virtual environment..."
+    source venv/bin/activate
+else
+    echo "⚠️  Virtual environment not found!"
+    echo "   Please run: python setup_venv.py"
+    exit 1
+fi
+
 # Step 1: Go to parent folder
 echo "� Moving to parent directory..."
 cd ..
 
 # Step 2: Start backend in background
 echo "🔧 Starting backend server..."
-python -m AnantaAI.backend.main &
+cd backend
+python main.py &
 BACKEND_PID=$!
+cd ..
 
 # Give backend time to start
 sleep 3
 
-# Step 3: Navigate to frontend directory
+# Step 2: Navigate to frontend directory
 echo "� Setting up frontend..."
-cd AnantaAI/frontend
+cd frontend
 
 # Step 4: Install npm dependencies
 echo "📥 Installing npm dependencies..."

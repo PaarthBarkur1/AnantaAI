@@ -1,28 +1,29 @@
-transformers[torch]
-sentence-transformers
-langchain
-faiss-cpu
-numpy
-torch
-accelerate
-einops
-bitsandbytes
-safetensors
-scipy
-pandas>=1.1.0
-tqdm>=4.60.0
-# Streamlit for web interface
-streamlit>=1.28.0
-# FastAPI for backend API
+# Core ML and AI dependencies
+torch>=2.0.0
+transformers>=4.30.0
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.0
+numpy>=1.21.0
+
+# Web framework dependencies
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
-# Web scraping requirements
+pydantic>=2.0.0
+
+# Web scraping dependencies
 requests>=2.28.0
 beautifulsoup4>=4.9.3
-huggingface_hub[hf_xet]
-# Optional: for GPU FAISS (comment out if not needed)
+
+# Streamlit for web interface
+streamlit>=1.28.0
+
+# Utility dependencies
+tqdm>=4.60.0
+typing-extensions>=4.0.0
+
+# Optional GPU support (uncomment if you have CUDA GPU)
 # faiss-gpu>=1.7.0
-# Optional: for Jupyter notebook usage
-# jupyter
-# Optional: for model card downloads
-# huggingface-hub>=0.0.8
+
+# Development dependencies (uncomment for development)
+# jupyter>=1.0.0
+# pytest>=7.0.0

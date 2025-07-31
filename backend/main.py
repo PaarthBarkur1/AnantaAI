@@ -1,12 +1,30 @@
-from sentence_transformers import SentenceTransformer
-from AnantaAI.backend.qna import ContextAgent, QAAgent, QAConfig, JSONContentSource, WebContentSource
+import os
 import json
 import uvicorn
+import numpy as np
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException
-import os
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from sentence_transformers import SentenceTransformer
+from qna import ContextAgent, QAAgent, QAConfig, JSONContentSource, WebContentSource
+
+
+def convert_numpy_types(obj):
+    """Convert numpy types to Python native types for JSON serialization."""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    else:
+        return obj
+
 
 app = FastAPI(title="IISc M.Mgt QA API")
 
@@ -26,13 +44,15 @@ context_agent = ContextAgent(config)
 
 # Add data sources
 try:
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     # Add JSON FAQ source
-    import os
-    CONTEXT_PATH = os.path.join(os.path.dirname(__file__), "context.json")
+    CONTEXT_PATH = os.path.join(script_dir, "context.json")
     context_agent.add_source(JSONContentSource(CONTEXT_PATH))
 
     # Add web sources
-    SOURCES_PATH = os.path.join(os.path.dirname(__file__), "sources.json")
+    SOURCES_PATH = os.path.join(script_dir, "sources.json")
     with open(SOURCES_PATH, 'r', encoding='utf-8') as f:
         web_sources = json.load(f)
 
@@ -71,12 +91,16 @@ async def process_query(query: Query):
     try:
         result = qa_agent.process_query(
             query.text, context_agent, top_k=query.max_results)
-        return {
+
+        # Convert numpy types to Python types for JSON serialization
+        response_data = {
             "answer": result["answer"],
-            "confidence": result.get("confidence", 0.0),
-            "sources": result.get("metadata", {}).get("sources_used", []),
-            "processing_time": result.get("_processing_time", 0.0)
+            "confidence": convert_numpy_types(result.get("confidence", 0.0)),
+            "sources": convert_numpy_types(result.get("metadata", {}).get("sources_used", [])),
+            "processing_time": convert_numpy_types(result.get("_processing_time", 0.0))
         }
+
+        return response_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -84,7 +108,9 @@ async def process_query(query: Query):
 @app.get("/api/categories")
 async def get_categories():
     try:
-        with open("sources.json", "r", encoding="utf-8") as f:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        sources_path = os.path.join(script_dir, "sources.json")
+        with open(sources_path, "r", encoding="utf-8") as f:
             sources = json.load(f)
             categories = set()
             for source in sources:
@@ -94,5 +120,4 @@ async def get_categories():
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("AnantaAI.backend.main:app",
-                host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

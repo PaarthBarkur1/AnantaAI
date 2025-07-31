@@ -1,3 +1,12 @@
+from faq_data import FAQ_DATA
+from sentence_transformers import SentenceTransformer
+from qna import (
+    ContextAgent,
+    JSONContentSource,
+    WebContentSource,
+    QAAgent,
+    QAConfig,
+)
 import streamlit as st
 import torch
 import time
@@ -11,15 +20,10 @@ from typing import Dict, Any, Optional, Tuple, List
 import uuid
 
 # --- project imports ---------------------------------------------------------
-from AnantaAI.backend.qna import (
-    ContextAgent,
-    JSONContentSource,
-    WebContentSource,
-    QAAgent,
-    SentenceTransformer,
-    QAConfig,
-)
-from AnantaAI.backend.faq_data import FAQ_DATA
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+
 
 # --- enhanced logging -------------------------------------------------------
 # Configure root logger to only show WARNING and above
