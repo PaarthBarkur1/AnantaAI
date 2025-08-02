@@ -1,10 +1,5 @@
 [
   {
-    "name": "IISc M.Mgt Program Overview",
-    "url": "https://mgmt.iisc.ac.in/programmes/master-of-management/",
-    "category": ["program", "overview", "curriculum", "structure", "courses"]
-  },
-  {
     "name": "IISc Admissions",
     "url": "https://admissions.iisc.ac.in/",
     "category": ["admission", "eligibility", "application", "cutoff", "percentile", "cat", "gate"]
@@ -45,4 +40,31 @@
     "url": "https://mgmt.iisc.ac.in/research-student/",
     "category": ["m.mgt",  "student life", "curriculum"]
   }
+  ,
+  {
+    "name":"IISc About Us",
+    "url":"https://doms-placement.netlify.app/pages/landing_page/",
+    "category":["about", "institute", "history", "mission"]
+  }
+  ,
+  {
+    "url": "https://doms-placement.netlify.app/pages/",
+    "name": "DOMS Placement",
+    "category": ["placement", "salary", "ctc", "companies", "offers"]
+  }
+  ,
+  {
+    "url":"https://doms-placement.netlify.app/pages/recruiter-insights/",
+    "name":"DOMS Placement Insights",
+    "category":["placement", "salary", "ctc", "companies", "offers"]
+  }
+  ,
+  {
+    "url":"https://doms-placement.netlify.app/pages/contact/",
+    "name":"DOMS Placement Contact",
+    "category":["contact", "help", "support", "feedback"]
+  }
+  
+
+
 ]

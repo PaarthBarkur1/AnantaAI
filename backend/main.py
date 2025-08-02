@@ -42,6 +42,12 @@ app.add_middleware(
 
 # Initialize QA system
 config = QAConfig()
+
+# Check for environment variable to disable AI generation
+if os.getenv('DISABLE_AI_GENERATION', 'false').lower() == 'true':
+    config.use_ai_generation = False
+    print("⚠️  AI generation disabled via environment variable")
+
 context_agent = ContextAgent(config)
 
 # Add data sources

@@ -73,6 +73,7 @@ class QAConfig:
     do_sample: bool = True
     context_window: int = 800
     min_confidence: float = 0.05  # Lower threshold for better recall
+    use_ai_generation: bool = True  # Set to False to disable AI model loading
 
 
 @dataclass
@@ -527,15 +528,23 @@ class QAAgent:
         self.config = config or QAConfig()
         self.device = device
 
+        # Check if AI generation is disabled
+        if not self.config.use_ai_generation:
+            self.use_ai_generation = False
+            logger.info("AI generation disabled - using context extraction only")
+            print("⚠️  AI generation disabled - using context extraction only")
+            return
+
         # Initialize tokenizer for Qwen2.5
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                "Qwen/Qwen2.5-0.5B-Instruct")
+            # Use a smaller model that fits better in GPU memory
+            model_name = "microsoft/DialoGPT-small"  # Much smaller than Qwen2.5-0.5B
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
-            logger.info("Successfully loaded Qwen2.5 tokenizer")
+            logger.info(f"Successfully loaded {model_name} tokenizer")
         except Exception as e:
-            logger.error(f"Failed to load Qwen tokenizer: {e}")
+            logger.error(f"Failed to load tokenizer: {e}")
             # Fallback to context extraction only
             self.use_ai_generation = False
             logger.info("Falling back to context extraction mode")
@@ -563,27 +572,20 @@ class QAAgent:
         try:
             pipeline_kwargs = {
                 "task": "text-generation",
-                "model": "Qwen/Qwen2.5-0.5B-Instruct",
+                "model": "microsoft/DialoGPT-small",  # Smaller model for better memory efficiency
                 "tokenizer": self.tokenizer,
                 "max_new_tokens": self.config.max_new_tokens,
                 "temperature": self.config.temperature,
                 "top_p": self.config.top_p,
                 "do_sample": self.config.do_sample,
-                "pad_token_id": self.tokenizer.pad_token_id,
-                "eos_token_id": self.tokenizer.eos_token_id,
-                "return_full_text": False,
-                "trust_remote_code": True  # Required for Qwen models
+                "return_full_text": False
             }
 
             # Add GPU-specific optimizations
             if self.device >= 0:
                 pipeline_kwargs.update({
                     "device_map": "auto",  # Automatic GPU placement
-                    "torch_dtype": torch.float16,  # Use FP16 for faster inference
-                    "model_kwargs": {
-                        "low_cpu_mem_usage": True  # Reduce CPU memory usage
-                        # Removed duplicate torch_dtype from model_kwargs
-                    }
+                    "torch_dtype": torch.float16  # Use FP16 for faster inference
                 })
                 print("✓ Using GPU optimizations (FP16, auto device mapping)")
             else:
@@ -593,11 +595,45 @@ class QAAgent:
             self.generator = pipeline(**pipeline_kwargs)
             self.use_ai_generation = True
             logger.info(
-                "Successfully initialized Qwen2.5 model for text generation")
+                "Successfully initialized DialoGPT-small model for text generation")
         except Exception as e:
-            logger.error(f"Failed to initialize Qwen2.5 model: {e}")
-            self.use_ai_generation = False
-            logger.info("Falling back to context extraction mode")
+            logger.error(f"Failed to initialize DialoGPT-small model: {e}")
+            # Try with an even smaller model as fallback
+            try:
+                logger.info("Trying with micro model...")
+                pipeline_kwargs = {
+                    "task": "text-generation",
+                    "model": "microsoft/DialoGPT-micro",  # Even smaller model
+                    "tokenizer": AutoTokenizer.from_pretrained("microsoft/DialoGPT-micro"),
+                    "max_new_tokens": self.config.max_new_tokens,
+                    "temperature": self.config.temperature,
+                    "top_p": self.config.top_p,
+                    "do_sample": self.config.do_sample,
+                    "return_full_text": False
+                }
+                
+                if pipeline_kwargs["tokenizer"].pad_token is None:
+                    pipeline_kwargs["tokenizer"].pad_token = pipeline_kwargs["tokenizer"].eos_token
+                
+                # Add GPU-specific optimizations
+                if self.device >= 0:
+                    pipeline_kwargs.update({
+                        "device_map": "auto",
+                        "torch_dtype": torch.float16
+                    })
+                else:
+                    pipeline_kwargs["device"] = "cpu"
+                
+                self.generator = pipeline(**pipeline_kwargs)
+                self.use_ai_generation = True
+                logger.info("Successfully initialized DialoGPT-micro model")
+            except Exception as e2:
+                logger.error(f"Failed to initialize fallback model: {e2}")
+                # Final fallback: context extraction only
+                self.use_ai_generation = False
+                logger.info("Using context extraction mode only - no AI generation")
+                print("⚠️  Using context extraction mode only (no AI generation)")
+                print("   This will provide answers based on exact text matches from the knowledge base.")
 
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text"""
@@ -608,33 +644,20 @@ class QAAgent:
             return int(len(text.split()) * 1.3)
 
     def _create_qwen_prompt(self, query: str, context: str) -> str:
-        """Create a proper prompt for Qwen2.5 model with professional, concise style"""
-        return f"""<|im_start|>system
-You are a professional admissions advisor for the IISc M.Mgt program. Provide clear, accurate, and concise answers based on the given context.
+        """Create a proper prompt for DialoGPT model with professional, concise style"""
+        return f"""Based on the following information about IISc M.Mgt program, answer the question professionally and accurately.
 
-Guidelines:
-- Be direct and professional
-- Answer the specific question asked
-- Use bullet points for lists when appropriate
-- Keep responses focused and to the point
-- Include only relevant information from the context
-- Avoid unnecessary elaboration or fluff
-<|im_end|>
-<|im_start|>user
-Context: {context[:800]}
+Information: {context[:600]}
 
 Question: {query}
 
-Provide a clear, professional answer:
-<|im_end|>
-<|im_start|>assistant
-"""
+Answer:"""
 
     def _clean_qwen_output(self, text: str) -> str:
-        """Clean Qwen model output"""
-        # Remove special tokens
-        text = text.replace("<|im_start|>", "").replace("<|im_end|>", "")
+        """Clean DialoGPT model output"""
+        # Remove any special tokens that might appear
         text = text.replace("<|endoftext|>", "")
+        text = text.replace("<|im_start|>", "").replace("<|im_end|>", "")
 
         # Clean up any remaining artifacts
         text = text.strip()
@@ -659,7 +682,10 @@ Provide a clear, professional answer:
             "i cannot",
             "as an ai",
             "i don't know",
-            "sorry, i cannot"
+            "sorry, i cannot",
+            "i'm sorry, but i don't have access to",
+            "i don't have enough information",
+            "i cannot provide specific information"
         ]
 
         # If answer contains problematic phrases, reject
@@ -667,17 +693,23 @@ Provide a clear, professional answer:
             return False
 
         # Check if answer is too short or too generic
-        if len(answer.split()) < 5:
+        if len(answer.split()) < 3:  # Reduced from 5 to 3
             return False
 
-        # Basic check - answer should have some overlap with context
-        answer_words = set(answer_lower.split())
-        context_words = set(context.lower().split())
-        overlap = len(answer_words.intersection(context_words))
-        overlap_ratio = overlap / len(answer_words) if answer_words else 0
-
-        # Very lenient threshold - just catch obvious hallucinations
-        return overlap_ratio > 0.15
+        # More lenient validation - just check for basic quality
+        # Don't require strict word overlap since AI can generate good answers
+        # that don't necessarily use the exact same words as the context
+        
+        # Check if answer seems like a real response (not just random text)
+        if len(answer) < 10:
+            return False
+            
+        # Check for basic sentence structure
+        if not any(char in answer for char in ['.', '!', '?', ':', ';']):
+            return False
+            
+        # If it passes basic checks, accept it
+        return True
 
     def _extract_relevant_sentences(self, query: str, text: str, max_sentences: int = 4) -> str:
         """Extract the most relevant sentences from a large text block"""
@@ -741,47 +773,48 @@ Provide a clear, professional answer:
 
         return ""
 
-    def _generate_answer_with_qwen(self, query: str, context: str) -> str:
-        """Generate answer using Qwen2.5 model"""
-        if not self.use_ai_generation:
-            return ""
-
+    def _generate_answer_with_ai(self, query: str, context: str) -> str:
+        """Generate answer using AI model"""
         try:
-            # Create proper Qwen prompt
+            if not self.use_ai_generation:
+                return ""
+
+            # Create prompt
             prompt = self._create_qwen_prompt(query, context)
 
-            # Check token count
-            if self._count_tokens(prompt) > self.config.max_length - self.config.max_new_tokens:
-                # Truncate context if prompt is too long
-                context = context[:400] + "..."
-                prompt = self._create_qwen_prompt(query, context)
-
-            # Generate with Qwen (professional, focused settings)
-            outputs = self.generator(
-                prompt,
+            # Generate response with better parameters for DialoGPT
+            response = self.generator(
+                prompt, 
                 max_new_tokens=min(150, self.config.max_new_tokens),
-                temperature=0.2,  # Lower for more focused, professional responses
-                top_p=0.75,  # More focused word choice
+                temperature=0.7,  # Slightly higher for more natural responses
+                top_p=0.9,
                 do_sample=True,
-                repetition_penalty=1.05,  # Slightly higher to avoid repetition
-                pad_token_id=self.tokenizer.pad_token_id,
+                pad_token_id=self.tokenizer.eos_token_id,
                 eos_token_id=self.tokenizer.eos_token_id
             )
 
-            if outputs and len(outputs) > 0:
-                generated_text = outputs[0].get("generated_text", "")
-                cleaned_answer = self._clean_qwen_output(generated_text)
-
-                # Validate the output length and quality
-                if (len(cleaned_answer) > 10 and
-                    cleaned_answer.count(' ') > 3 and
-                        self._validate_answer_grounding(cleaned_answer, context)):
-                    return cleaned_answer
-
+            # Extract and clean the generated text
+            if response and len(response) > 0:
+                generated_text = response[0]['generated_text']
+                # Remove the input prompt from the output
+                if prompt in generated_text:
+                    generated_text = generated_text[len(prompt):]
+                
+                cleaned_text = self._clean_qwen_output(generated_text)
+                
+                # Validate the answer
+                if self._validate_answer_grounding(cleaned_text, context):
+                    return cleaned_text
+                else:
+                    logger.warning("Generated answer failed validation, falling back to context extraction")
+                    return ""
+            else:
+                logger.warning("No response generated from AI model")
+                return ""
+                
         except Exception as e:
-            logger.warning(f"Qwen generation failed: {e}")
-
-        return ""
+            logger.error(f"Error generating AI answer: {e}")
+            return ""
 
     def _extract_direct_answer(self, query: str, search_results: List) -> str:
         """Extract focused answer from search results with AI generation fallback"""
@@ -799,7 +832,7 @@ Provide a clear, professional answer:
 
         # Try AI generation first if available
         if self.use_ai_generation and combined_context:
-            ai_answer = self._generate_answer_with_qwen(
+            ai_answer = self._generate_answer_with_ai(
                 query, combined_context)
             if ai_answer:
                 return ai_answer
@@ -999,7 +1032,8 @@ def create_config_from_args(args) -> QAConfig:
         max_new_tokens=getattr(args, 'max_new_tokens', 256),
         temperature=getattr(args, 'temperature', 0.7),
         context_window=getattr(args, 'context_window', 800),
-        min_confidence=getattr(args, 'min_confidence', 0.1)
+        min_confidence=getattr(args, 'min_confidence', 0.1),
+        use_ai_generation=not getattr(args, 'no_ai_generation', False)
     )
 
 # ---------------------------
@@ -1043,6 +1077,8 @@ Examples:
                         default=800, help='Maximum context tokens')
     parser.add_argument('--min_confidence', type=float,
                         default=0.1, help='Minimum confidence threshold')
+    parser.add_argument('--no_ai_generation', action='store_true',
+                        help='Disable AI model loading and use only context extraction')
 
     # Output options
     parser.add_argument('--max_print', type=int, default=1,

@@ -91,7 +91,6 @@ export function ChatInput({ onSubmit, disabled }: ChatInputProps) {
                   onClick={() => {
                     onSubmit(suggestion, undefined)
                     setText('')
-                    setShowSuggestions(false)
                   }}
                   className="px-3 py-1.5 text-sm bg-slate-700/80 hover:bg-slate-600/80 rounded-full text-slate-300 transition-colors duration-200"
                 >
