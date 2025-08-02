@@ -685,18 +685,22 @@ class ContextAgent:
                 source_type = entry.get(
                     "metadata", {}).get("source", "unknown")
 
-                # Calculate confidence (improved scoring with JSON boost)
-                # Convert L2 distance to similarity with better scaling
-                # More generous similarity
+                # Calculate confidence with improved scoring
                 similarity = max(0.0, 1.0 - (distance / 1.5))
                 source_confidence = self.get_source_confidence(source_type)
 
-                # Extra boost for JSON sources (exact FAQ data)
+                # Enhanced boost logic based on source type and distance
                 if source_type == "json":
-                    # 25% boost for JSON (reduced from 50%)
+                    # Higher boost for curated FAQ data
+                    similarity = min(1.0, similarity * 1.3)
+                elif distance < 0.25:  # Very close matches
                     similarity = min(1.0, similarity * 1.25)
-                elif distance < 0.3:  # Very close matches
-                    similarity = min(1.0, similarity * 1.2)
+                elif distance < 0.4:  # Good matches
+                    similarity = min(1.0, similarity * 1.1)
+
+                # Additional boost for domain-specific content
+                if self._is_domain_specific_content(entry, query):
+                    similarity = min(1.0, similarity * 1.15)
 
                 combined_confidence = similarity * source_confidence
 
@@ -711,6 +715,9 @@ class ContextAgent:
         filtered_results = [
             r for r in results if r.confidence >= self.config.min_confidence]
 
+        # Apply diversity filtering to avoid similar results
+        diverse_results = self._apply_diversity_filtering(filtered_results, query)
+
         # Update stats
         search_time = time.time() - start_time
         self.search_stats['total_searches'] += 1
@@ -720,7 +727,64 @@ class ContextAgent:
             / self.search_stats['total_searches']
         )
 
-        return filtered_results[:top_k]
+        return diverse_results[:top_k]
+
+    def _is_domain_specific_content(self, entry: dict, query: str) -> bool:
+        """Check if content is specifically relevant to IISc M.Mgt domain"""
+        query_lower = query.lower()
+        answer_text = entry.get('answer', '').lower()
+        question_text = entry.get('question', '').lower()
+        
+        # IISc M.Mgt specific terms
+        domain_terms = {
+            'iisc', 'm.mgt', 'management', 'bangalore', 'indian institute of science',
+            'placement', 'ctc', 'salary', 'recruitment', 'interview', 'admission',
+            'eligibility', 'curriculum', 'course', 'credit', 'semester', 'thesis',
+            'project', 'internship', 'summer', 'faculty', 'research', 'campus',
+            'hostel', 'accommodation', 'facility', 'library', 'gate', 'cat',
+            'percentile', 'cutoff', 'marks', 'cgpa', 'engineering', 'technology'
+        }
+        
+        # Check if query contains domain terms
+        query_has_domain_terms = any(term in query_lower for term in domain_terms)
+        
+        # Check if content contains domain terms
+        content_has_domain_terms = any(term in answer_text or term in question_text 
+                                      for term in domain_terms)
+        
+        return query_has_domain_terms and content_has_domain_terms
+
+    def _apply_diversity_filtering(self, results: List[SearchResult], query: str) -> List[SearchResult]:
+        """Apply diversity filtering to avoid similar results"""
+        if not results:
+            return results
+        
+        diverse_results = []
+        used_content = []
+        
+        for result in results:
+            # Check if this result is too similar to already selected ones
+            is_similar = False
+            current_content = result.content.get('answer', '').lower()
+            current_words = set(current_content.split())
+            
+            for used_content_words in used_content:
+                # Calculate similarity between current and used content
+                if len(current_words) > 0 and len(used_content_words) > 0:
+                    similarity = len(current_words.intersection(used_content_words)) / len(current_words.union(used_content_words))
+                    if similarity > 0.6:  # If more than 60% similar, skip
+                        is_similar = True
+                        break
+            
+            if not is_similar:
+                diverse_results.append(result)
+                used_content.append(current_words)
+                
+                # Limit to reasonable number of diverse results
+                if len(diverse_results) >= 5:
+                    break
+        
+        return diverse_results
 
 # ---------------------------
 # Enhanced QA Agent with Qwen2.5 Model
@@ -1000,7 +1064,8 @@ Answer:"""
             "i am an ai", "i cannot", "as an ai", "i don't know",
             "sorry, i cannot", "i'm sorry, but i don't have access to",
             "i don't have enough information", "i cannot provide specific information",
-            "i'm not sure", "i'm unable to", "i can't help", "i don't have access"
+            "i'm not sure", "i'm unable to", "i can't help", "i don't have access",
+            "based on the information provided", "according to the context", "the context shows"
         ]
 
         # If answer contains problematic phrases, reject
@@ -1008,7 +1073,7 @@ Answer:"""
             return False
 
         # Check basic quality metrics
-        if len(answer.split()) < 3 or len(answer) < 15:
+        if len(answer.split()) < 5 or len(answer) < 20:
             return False
 
         # Check for basic sentence structure
@@ -1025,20 +1090,22 @@ Answer:"""
         # Check for numerical information (often indicates specific, useful answers)
         has_numerical_info = self._has_numerical_information(answer_lower)
 
-        # More lenient validation - accept if ANY of these conditions are met:
-        # 1. Decent grounding score (lowered threshold)
-        # 2. Domain relevant content
-        # 3. Contains numerical information (percentages, numbers, etc.)
-        # 4. Reasonable length and structure (already checked above)
+        # Check for specific, actionable information
+        has_specific_info = self._has_specific_information(answer_lower)
 
-        if grounding_score >= 0.15:  # Lowered from 0.2 to 0.15
+        # More stringent validation for better quality answers:
+        # 1. Good grounding score
+        # 2. Domain relevant content
+        # 3. Contains specific, actionable information
+        # 4. Contains numerical information with decent grounding
+
+        if grounding_score >= 0.25:  # Higher threshold for better quality
             return True
-        elif domain_relevance:
+        elif domain_relevance and has_specific_info:
             return True
-        elif has_numerical_info and grounding_score >= 0.05:  # Very low threshold if has numbers
+        elif has_numerical_info and grounding_score >= 0.15:  # Higher threshold for numerical info
             return True
-        # Longer answers with minimal grounding
-        elif len(answer.split()) >= 8 and grounding_score >= 0.08:
+        elif len(answer.split()) >= 12 and grounding_score >= 0.2:  # Longer answers need better grounding
             return True
         else:
             return False
@@ -1136,6 +1203,85 @@ Answer:"""
 
         return min(1.0, base_score + domain_boost)
 
+    def _calculate_content_relevance(self, content: dict, query: str) -> float:
+        """Calculate how relevant a content piece is to the query"""
+        query_lower = query.lower()
+        query_words = set(query_lower.split())
+        
+        # Get content text
+        answer_text = content.get('answer', '').lower()
+        question_text = content.get('question', '').lower()
+        
+        # Calculate word overlap
+        answer_words = set(answer_text.split())
+        question_words = set(question_text.split())
+        
+        # Remove common stop words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+        query_words = query_words - stop_words
+        answer_words = answer_words - stop_words
+        question_words = question_words - stop_words
+        
+        if not query_words:
+            return 0.0
+        
+        # Calculate overlap scores
+        answer_overlap = len(query_words.intersection(answer_words)) / len(query_words)
+        question_overlap = len(query_words.intersection(question_words)) / len(query_words)
+        
+        # Weight question overlap more heavily as it's more indicative of relevance
+        relevance_score = (question_overlap * 0.7) + (answer_overlap * 0.3)
+        
+        return min(1.0, relevance_score)
+
+    def _assess_answer_quality(self, answer: str, query: str) -> float:
+        """Assess the overall quality of an answer"""
+        if not answer or not query:
+            return 0.0
+        
+        answer_lower = answer.lower()
+        query_lower = query.lower()
+        
+        # Length quality (not too short, not too long)
+        word_count = len(answer.split())
+        if 10 <= word_count <= 100:
+            length_score = 1.0
+        elif 5 <= word_count <= 150:
+            length_score = 0.8
+        else:
+            length_score = 0.5
+        
+        # Specificity score
+        specificity_score = 0.0
+        if self._has_specific_information(answer):
+            specificity_score += 0.3
+        if self._has_numerical_information(answer):
+            specificity_score += 0.2
+        if self._check_domain_relevance(answer):
+            specificity_score += 0.3
+        
+        # Coherence score (basic sentence structure)
+        coherence_score = 0.0
+        if any(char in answer for char in ['.', '!', '?']):
+            coherence_score += 0.2
+        if len(answer.split()) >= 5:
+            coherence_score += 0.2
+        if not any(phrase in answer_lower for phrase in ['i cannot', 'i don\'t know', 'sorry']):
+            coherence_score += 0.3
+        
+        # Query relevance score
+        query_relevance = self._calculate_grounding_score(answer_lower, query_lower)
+        
+        # Combine scores
+        total_score = (
+            length_score * 0.2 +
+            specificity_score * 0.4 +
+            coherence_score * 0.2 +
+            query_relevance * 0.2
+        )
+        
+        return min(1.0, total_score)
+
     def _check_domain_relevance(self, answer: str) -> bool:
         """Check if answer contains domain-relevant terms for IISc M.Mgt"""
         domain_terms = {
@@ -1172,6 +1318,40 @@ Answer:"""
 
         return any(re.search(pattern, answer, re.IGNORECASE) for pattern in numerical_patterns)
 
+    def _has_specific_information(self, answer: str) -> bool:
+        """Check if answer contains specific, actionable information"""
+        answer_lower = answer.lower()
+        
+        # Look for specific terms that indicate actionable information
+        specific_indicators = [
+            'specific', 'exact', 'precise', 'detailed', 'particular',
+            'include', 'consist', 'comprise', 'contain', 'involve',
+            'require', 'need', 'must', 'should', 'typically',
+            'usually', 'generally', 'commonly', 'often', 'frequently',
+            'available', 'offered', 'provided', 'facilitated', 'supported',
+            'through', 'via', 'using', 'with', 'by', 'during', 'while',
+            'access', 'participate', 'enroll', 'apply', 'submit',
+            'deadline', 'cutoff', 'percentile', 'score', 'marks',
+            'company', 'firm', 'organization', 'institution', 'university',
+            'faculty', 'professor', 'researcher', 'student', 'graduate'
+        ]
+        
+        # Check for specific IISc M.Mgt terms
+        domain_specific_terms = [
+            'iisc', 'm.mgt', 'management', 'bangalore', 'indian institute',
+            'placement', 'ctc', 'salary', 'recruitment', 'interview',
+            'curriculum', 'course', 'credit', 'semester', 'thesis',
+            'project', 'internship', 'summer', 'faculty', 'research',
+            'campus', 'hostel', 'accommodation', 'facility', 'library'
+        ]
+        
+        # Count specific indicators
+        specific_count = sum(1 for term in specific_indicators if term in answer_lower)
+        domain_count = sum(1 for term in domain_specific_terms if term in answer_lower)
+        
+        # Answer is specific if it has multiple specific indicators or domain-specific terms
+        return specific_count >= 3 or domain_count >= 2
+
     def _extract_relevant_sentences(self, query: str, text: str, max_sentences: int = 4) -> str:
         """Enhanced sentence extraction with better relevance scoring and context awareness"""
         if not text:
@@ -1200,13 +1380,13 @@ Answer:"""
         # Sort by score and select best sentences
         sentence_scores.sort(key=lambda x: (-x[1], x[2]))
 
-        # Select and synthesize top sentences
-        selected_sentences = self._select_and_synthesize_sentences(
-            sentence_scores, max_sentences, query_type
+        # Select and synthesize top sentences with better coherence
+        selected_sentences = self._select_and_synthesize_sentences_improved(
+            sentence_scores, max_sentences, query_type, query_lower
         )
 
         if selected_sentences:
-            result = self._format_final_answer(selected_sentences)
+            result = self._format_final_answer_improved(selected_sentences, query_type)
             return result
 
         return ""
@@ -1351,6 +1531,94 @@ Answer:"""
                 used_content.append(sentence_words)
 
         return selected
+
+    def _select_and_synthesize_sentences_improved(self, sentence_scores: list, max_sentences: int, query_type: str, query_lower: str) -> list:
+        """Improved sentence selection with better coherence and relevance"""
+        selected = []
+        used_content = []
+        
+        # First pass: select high-scoring sentences
+        for sentence, score, _ in sentence_scores:
+            if len(selected) >= max_sentences:
+                break
+                
+            if score <= 0:
+                continue
+                
+            # Avoid very similar sentences
+            sentence_words = set(sentence.lower().split())
+            if not any(len(sentence_words.intersection(used)) > len(sentence_words) * 0.6
+                       for used in used_content):
+                selected.append(sentence)
+                used_content.append(sentence_words)
+        
+        # If we have enough sentences, return them
+        if len(selected) >= 2:
+            return selected
+            
+        # Second pass: if we need more sentences, be more lenient
+        for sentence, score, _ in sentence_scores:
+            if len(selected) >= max_sentences:
+                break
+                
+            if score <= 0:
+                continue
+                
+            # Check if this sentence is already selected
+            if sentence in selected:
+                continue
+                
+            # More lenient similarity check
+            sentence_words = set(sentence.lower().split())
+            if not any(len(sentence_words.intersection(used)) > len(sentence_words) * 0.8
+                       for used in used_content):
+                selected.append(sentence)
+                used_content.append(sentence_words)
+        
+        return selected
+
+    def _format_final_answer_improved(self, sentences: list, query_type: str) -> str:
+        """Format the final answer with better coherence and structure"""
+        if not sentences:
+            return ""
+        
+        # Clean and prepare sentences
+        cleaned_sentences = []
+        for sentence in sentences:
+            sent = sentence.strip()
+            if sent:
+                # Ensure proper sentence ending
+                if not sent.endswith(('.', '!', '?')):
+                    sent += '.'
+                cleaned_sentences.append(sent)
+        
+        if not cleaned_sentences:
+            return ""
+        
+        # Join sentences with proper spacing
+        result = ' '.join(cleaned_sentences)
+        
+        # Clean up any double periods or spaces
+        result = result.replace('..', '.')
+        result = result.replace('  ', ' ')
+        
+        # Add query-type specific formatting
+        if query_type in ['placement', 'salary', 'ctc']:
+            # For placement questions, ensure numerical information is clear
+            if any(char.isdigit() for char in result):
+                result = result.replace('₹', '₹').replace('LPA', ' LPA').replace('lpa', ' LPA')
+        
+        elif query_type in ['eligibility', 'admission']:
+            # For admission questions, ensure requirements are clear
+            if 'required' in result.lower() or 'need' in result.lower():
+                result = result.replace(' - ', '. ').replace('- ', '. ')
+        
+        elif query_type in ['curriculum', 'course']:
+            # For curriculum questions, ensure course structure is clear
+            if 'include' in result.lower() or 'consist' in result.lower():
+                result = result.replace(' - ', '. ').replace('- ', '. ')
+        
+        return result.strip()
 
     def _format_final_answer(self, sentences: list) -> str:
         """Format the final answer from selected sentences"""
@@ -1734,27 +2002,52 @@ Answer:"""
 
             combined_context = "\n\n".join(focused_contexts[:2])
 
-            # Improved confidence calculation
-            # Weight by position (first results are more important)
+            # Improved confidence calculation with better accuracy
+            # Weight by position and source quality
             weighted_confidence = 0
             total_weight = 0
+            
             for i, result in enumerate(search_results[:3]):
-                weight = 1.0 / (i + 1)  # 1.0, 0.5, 0.33...
-                weighted_confidence += result.confidence * weight
-                total_weight += weight
+                # Position weight (first results are more important)
+                position_weight = 1.0 / (i + 1)  # 1.0, 0.5, 0.33...
+                
+                # Source quality weight
+                source_type = result.content.get("metadata", {}).get("source", "unknown")
+                source_weight = 1.0
+                if source_type == "json":
+                    source_weight = 1.3  # Higher weight for curated FAQ data
+                elif source_type == "web":
+                    source_weight = 0.9  # Lower weight for web content
+                
+                # Content relevance weight
+                content_relevance = self._calculate_content_relevance(result.content, query)
+                relevance_weight = 1.0 + (content_relevance * 0.5)  # Boost up to 50%
+                
+                # Combined weight
+                combined_weight = position_weight * source_weight * relevance_weight
+                weighted_confidence += result.confidence * combined_weight
+                total_weight += combined_weight
 
             avg_confidence = weighted_confidence / total_weight if total_weight > 0 else 0
 
-            # Boost confidence if we have multiple good matches or JSON sources
+            # Quality-based confidence adjustments
             good_matches = [r for r in search_results if r.confidence > 0.7]
             json_sources = [r for r in search_results if r.content.get(
                 "metadata", {}).get("source") == "json"]
-
+            
+            # Check answer quality
+            answer_quality = self._assess_answer_quality(answer, query)
+            
+            # Apply quality-based adjustments
+            if answer_quality > 0.8:
+                avg_confidence = min(1.0, avg_confidence * 1.1)  # Boost for high-quality answers
+            elif answer_quality < 0.4:
+                avg_confidence = max(0.0, avg_confidence * 0.8)  # Reduce for low-quality answers
+            
             if len(good_matches) >= 2:
-                avg_confidence = min(1.0, avg_confidence * 1.2)
-            elif len(json_sources) >= 1:
-                # Extra boost for JSON sources (exact FAQ data) - reduced
                 avg_confidence = min(1.0, avg_confidence * 1.15)
+            elif len(json_sources) >= 1:
+                avg_confidence = min(1.0, avg_confidence * 1.1)
 
             processing_time = time.time() - start_time
 
