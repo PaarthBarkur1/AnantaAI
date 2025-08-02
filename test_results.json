@@ -1,0 +1,395 @@
+{
+  "summary": {
+    "total_questions": 16,
+    "average_quality_score": 0.6860119047619047,
+    "average_confidence": 0.7563725113868713,
+    "average_processing_time": 0.027183040976524353
+  },
+  "category_performance": {
+    "Admissions": 0.680952380952381,
+    "Academics": 0.7785714285714287,
+    "Placements": 0.6785714285714286,
+    "Finances": 0.5976190476190477,
+    "Campus Life": 0.6142857142857143
+  },
+  "detailed_results": [
+    {
+      "question": "What are the eligibility criteria for IISc M.Mgt?",
+      "category": "Admissions",
+      "answer": "The basic eligibility criteria for IISc M. Mgt program are:\n- Four-year Bachelor's degree in Engineering/Technology (BE/BTech) or equivalent with minimum 60% marks or equivalent CGPA\n- Candidates with Master's degree in Science or Commerce with Mathematics as a subject are also eligible\n- As of 2025, the program mainly accepts candidates with 4-year STEM degrees (B. Planning)\n- Humanities degrees are currently not eligible\n- Most students have engineering backgrounds, but related STEM fields are also accepted.",
+      "confidence": 1.0,
+      "processing_time": 0.1932072639465332,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "bachelor",
+          "engineering",
+          "60%",
+          "marks",
+          "cgpa",
+          "stem"
+        ],
+        "missing_keywords": [],
+        "word_count": 78,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": true,
+        "has_specific_terms": false,
+        "quality_score": 0.7285714285714286
+      }
+    },
+    {
+      "question": "What is the CAT cutoff for IISc M.Mgt?",
+      "category": "Admissions",
+      "answer": "For the General category, the CAT/GATE percentile cutoff is approximately 98. Full category-wise cutoffs are available in the official document at https://iisc. The cutoffs vary by category and are updated annually.",
+      "confidence": 1.0,
+      "processing_time": 0.02155590057373047,
+      "quality_metrics": {
+        "keyword_coverage": 0.75,
+        "found_keywords": [
+          "percentile",
+          "cutoff",
+          "general"
+        ],
+        "missing_keywords": [
+          "98.8"
+        ],
+        "word_count": 31,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": true,
+        "has_specific_terms": false,
+        "quality_score": 0.6285714285714286
+      }
+    },
+    {
+      "question": "Is work experience required for admission?",
+      "category": "Admissions",
+      "answer": "Standard documentation like payslips, ITRs, and employer letters are generally required to verify work experience. Work experience provides no formal advantage in scoring, but relevant experience may help during interviews. For the General category, the CAT/GATE percentile cutoff is approximately 98.",
+      "confidence": 0.7518665194511414,
+      "processing_time": 0.020451068878173828,
+      "quality_metrics": {
+        "keyword_coverage": 0.6666666666666666,
+        "found_keywords": [
+          "no formal advantage",
+          "help during interviews"
+        ],
+        "missing_keywords": [
+          "not mandatory"
+        ],
+        "word_count": 41,
+        "length_score": 1.0,
+        "domain_relevance": 0.0,
+        "has_numbers": true,
+        "has_specific_terms": true,
+        "quality_score": 0.6666666666666666
+      }
+    },
+    {
+      "question": "What is the course structure of M.Mgt program?",
+      "category": "Academics",
+      "answer": "The course structure includes Hard Core Courses totaling 24 credits (8 courses \u00d7 3 credits each), Stream Core Courses totaling 12 credits (4 courses \u00d7 3 credits each), Electives totaling 12 credits, and Project work totaling 16 credits, for a total of 64 credits. The business analytics stream core courses cover Operations Research, Regression and Time Series Analysis, Data Mining, and Decision Models. Hard core courses include Introductory Probability Theory, Applied Statistics, Operations Management, Marketing Management, Behavioral Science, Managerial Economics, and Human Resource Management.",
+      "confidence": 0.887986421585083,
+      "processing_time": 0.018216848373413086,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "64 credits",
+          "hard core",
+          "stream core",
+          "electives",
+          "project"
+        ],
+        "missing_keywords": [],
+        "word_count": 84,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": true,
+        "has_specific_terms": true,
+        "quality_score": 0.8285714285714286
+      }
+    },
+    {
+      "question": "What courses are offered in the curriculum?",
+      "category": "Academics",
+      "answer": "The course structure includes:\n. Hard Core Courses: 24 credits (8 courses \u00d7 3 credits each)\n. Stream Core Courses: 12 credits (4 courses \u00d7 3 credits each)\n. Electives: 12 credits\n. Project work: 16 credits\n. Total: 64 credits\n\nHard core courses include:\n. Introductory Probability Theory\n. Applied Statistics\n. Operations Management\n. Marketing Management\n. Behavioral Science\n. Managerial Economics\n. Human Resource Management\n\nBusiness analytics stream core courses cover:\n. Operations Research\n. Regression and Time Series Analysis\n. Data Mining\n. Decision Models.",
+      "confidence": 0.6803846955299377,
+      "processing_time": 0.015048027038574219,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "probability",
+          "statistics",
+          "operations",
+          "marketing",
+          "economics"
+        ],
+        "missing_keywords": [],
+        "word_count": 89,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": true,
+        "has_specific_terms": true,
+        "quality_score": 0.8285714285714286
+      }
+    },
+    {
+      "question": "What is the class schedule like?",
+      "category": "Academics",
+      "answer": "Student life is described as chill and balanced:\n- Classes held 4 days a week (Monday to Thursday) from 9:30 AM to 2 PM\n- Fridays reserved for seminars\n- Students enjoy ample free time\n- Modern sports facilities including football and cricket\n- Single-room accommodation\n- Beautiful IISc campus atmosphere.",
+      "confidence": 0.588452160358429,
+      "processing_time": 0.02054142951965332,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "4 days",
+          "monday to thursday",
+          "9:30 AM to 2 PM",
+          "fridays"
+        ],
+        "missing_keywords": [],
+        "word_count": 51,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": true,
+        "has_specific_terms": false,
+        "quality_score": 0.7285714285714286
+      }
+    },
+    {
+      "question": "What is the average placement package?",
+      "category": "Placements",
+      "answer": "Placement statistics show:\n- Average CTC: approximately \u20b927  LPA\n- Median CTC: approximately \u20b924  LPA\n- Highest CTC: \u20b935  LPA+\n- Typical in-hand salary: \u20b920  LPA+\n- Nearly all students get placed historically, including those with gap years or diverse backgrounds\n- Distribution is right-skewed due to high offers in quant/AI roles.",
+      "confidence": 0.544253945350647,
+      "processing_time": 0.012986898422241211,
+      "quality_metrics": {
+        "keyword_coverage": 0.75,
+        "found_keywords": [
+          "average",
+          "ctc",
+          "placement"
+        ],
+        "missing_keywords": [
+          "\u20b927 LPA"
+        ],
+        "word_count": 52,
+        "length_score": 1.0,
+        "domain_relevance": 0.2857142857142857,
+        "has_numbers": true,
+        "has_specific_terms": false,
+        "quality_score": 0.6571428571428571
+      }
+    },
+    {
+      "question": "Which companies recruit from IISc M.Mgt?",
+      "category": "Placements",
+      "answer": "Typical recruiters include:\n- Wells Fargo\n- JPMC (JP Morgan Chase)\n- Uber\n- Quantum Street AI\n- Various analytics, banking, tech, and research sector companies\nMost graduates are placed in data science, quantitative finance, AI research, and analytics roles.",
+      "confidence": 1.0,
+      "processing_time": 0.016093730926513672,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "wells fargo",
+          "jpmc",
+          "uber",
+          "quantum street",
+          "companies"
+        ],
+        "missing_keywords": [],
+        "word_count": 40,
+        "length_score": 1.0,
+        "domain_relevance": 0.0,
+        "has_numbers": false,
+        "has_specific_terms": true,
+        "quality_score": 0.7000000000000001
+      }
+    },
+    {
+      "question": "What types of roles do graduates get?",
+      "category": "Placements",
+      "answer": "Most graduates are placed in:\n- Data science roles\n- Quantitative finance positions\n- AI research positions\n- Analytics roles\n- Product management roles are rare but do occur\n- When PM roles occur, companies value projects with tangible outcomes, leadership, internships, and strong communication.",
+      "confidence": 0.5846240520477295,
+      "processing_time": 0.01523733139038086,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "data science",
+          "quantitative finance",
+          "ai research",
+          "analytics"
+        ],
+        "missing_keywords": [],
+        "word_count": 45,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": false,
+        "has_specific_terms": false,
+        "quality_score": 0.6285714285714287
+      }
+    },
+    {
+      "question": "What is the tuition fee for the program?",
+      "category": "Finances",
+      "answer": "The tuition fee is approximately \u20b92,50,000 per year. Please refer to the official IISc website for the latest fee structure as fees may be updated annually.",
+      "confidence": 0.5687820315361023,
+      "processing_time": 0.014866828918457031,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "\u20b92,50,000",
+          "per year",
+          "tuition",
+          "fee"
+        ],
+        "missing_keywords": [],
+        "word_count": 26,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": true,
+        "has_specific_terms": false,
+        "quality_score": 0.7285714285714286
+      }
+    },
+    {
+      "question": "Are scholarships available?",
+      "category": "Finances",
+      "answer": "No, institute scholarships are not offered. However, external scholarships and assistantships may be available. Students should explore external funding opportunities.",
+      "confidence": 0.9270955920219421,
+      "processing_time": 0.012601852416992188,
+      "quality_metrics": {
+        "keyword_coverage": 0.6666666666666666,
+        "found_keywords": [
+          "external scholarships",
+          "assistantships"
+        ],
+        "missing_keywords": [
+          "no institute scholarships"
+        ],
+        "word_count": 20,
+        "length_score": 1.0,
+        "domain_relevance": 0.0,
+        "has_numbers": false,
+        "has_specific_terms": false,
+        "quality_score": 0.4666666666666667
+      }
+    },
+    {
+      "question": "What are the accommodation facilities?",
+      "category": "Campus Life",
+      "answer": "Students enjoy:\n- Single-room accommodation\n- Modern hostel facilities\n- Beautiful IISc campus atmosphere\n- Library access\n- Night canteens\n- Extracurricular activities.",
+      "confidence": 0.7333346605300903,
+      "processing_time": 0.015006065368652344,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "single-room",
+          "hostel",
+          "campus",
+          "library",
+          "canteens"
+        ],
+        "missing_keywords": [],
+        "word_count": 23,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": false,
+        "has_specific_terms": false,
+        "quality_score": 0.6285714285714287
+      }
+    },
+    {
+      "question": "What is the overall student experience like?",
+      "category": "Campus Life",
+      "answer": "Student life is described as:\n- Chill and balanced\n- Ample free time for personal development\n- Vibrant campus experience\n- Access to library and night canteens\n- Rich extracurricular activities\n- Strong academic and social community.",
+      "confidence": 0.6760110259056091,
+      "processing_time": 0.015287160873413086,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "chill",
+          "balanced",
+          "ample free time",
+          "vibrant campus"
+        ],
+        "missing_keywords": [],
+        "word_count": 37,
+        "length_score": 1.0,
+        "domain_relevance": 0.0,
+        "has_numbers": false,
+        "has_specific_terms": false,
+        "quality_score": 0.6000000000000001
+      }
+    },
+    {
+      "question": "What is the interview process like?",
+      "category": "Admissions",
+      "answer": "The interview process includes:\n- Focus on statistics and math topics such as probability\n- Questions may also cover economics, coding, or specific domain knowledge depending on your background\n- Coding is not a strict prerequisite but helpful especially for CS backgrounds\n- Group discussion on general knowledge and communication skills\n- Brief written summary exercise\n- Preparation should focus on basic math, probability, statistics, and coding if applicable\n- Be prepared to discuss projects and previous work experience.",
+      "confidence": 1.0,
+      "processing_time": 0.01648736000061035,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "statistics",
+          "math",
+          "probability",
+          "group discussion",
+          "coding"
+        ],
+        "missing_keywords": [],
+        "word_count": 79,
+        "length_score": 1.0,
+        "domain_relevance": 0.0,
+        "has_numbers": false,
+        "has_specific_terms": true,
+        "quality_score": 0.7000000000000001
+      }
+    },
+    {
+      "question": "What electives are available?",
+      "category": "Academics",
+      "answer": "Suggested electives include:\n. Macroeconomics\n. Linear and Non-linear programming\n. Deep Learning for NLP\n. Management of Technology for Sustainability\n. Entrepreneurship for Technology Start-ups\n. Random processes\n. Modeling and Simulation\n. Introduction to Scalable Systems\n. Public Policy Theory & Process.",
+      "confidence": 0.5071480870246887,
+      "processing_time": 0.014070749282836914,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "macroeconomics",
+          "deep learning",
+          "entrepreneurship",
+          "simulation"
+        ],
+        "missing_keywords": [],
+        "word_count": 44,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": false,
+        "has_specific_terms": true,
+        "quality_score": 0.7285714285714286
+      }
+    },
+    {
+      "question": "Do candidates from specific backgrounds get higher packages?",
+      "category": "Placements",
+      "answer": "Candidates from CSE/IT backgrounds or with prior SDE experience see offers above \u20b930 LPA. The program attracts students from various engineering disciplines, and placement outcomes are generally strong across all backgrounds.",
+      "confidence": 0.6520212888717651,
+      "processing_time": 0.013270139694213867,
+      "quality_metrics": {
+        "keyword_coverage": 1.0,
+        "found_keywords": [
+          "cse",
+          "it",
+          "sde",
+          "above \u20b930 LPA",
+          "engineering"
+        ],
+        "missing_keywords": [],
+        "word_count": 31,
+        "length_score": 1.0,
+        "domain_relevance": 0.14285714285714285,
+        "has_numbers": true,
+        "has_specific_terms": false,
+        "quality_score": 0.7285714285714286
+      }
+    }
+  ]
+}

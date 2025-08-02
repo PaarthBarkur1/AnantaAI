@@ -1,285 +1,349 @@
 #!/usr/bin/env python3
 """
-Test script to verify the improved QA logic and answer quality enhancements.
-This script tests the enhanced prompt engineering, context processing, answer validation,
-and semantic search improvements.
+Test script for improved QA system
+Tests various types of questions that students and recruiters would ask about IISc M.Mgt
 """
 
 import sys
 import os
 import time
-from typing import List, Dict
+import json
+from typing import List, Dict, Any
 
 # Add the backend directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
-try:
-    from backend.qna import ContextAgent, QAAgent, QAConfig, JSONContentSource
-    from sentence_transformers import SentenceTransformer
-except ImportError as e:
-    print(f"Import error: {e}")
-    print("Please ensure you're running this from the project root directory")
-    sys.exit(1)
+from backend.qna import ContextAgent, QAAgent, QAConfig, JSONContentSource, WebContentSource
+from sentence_transformers import SentenceTransformer
+import torch
 
+def test_questions() -> List[Dict[str, str]]:
+    """Define test questions covering various aspects of IISc M.Mgt"""
+    return [
+        # Admission and Eligibility Questions
+        {
+            "category": "Admissions",
+            "question": "What are the eligibility criteria for IISc M.Mgt?",
+            "expected_keywords": ["bachelor", "engineering", "60%", "marks", "cgpa", "stem"]
+        },
+        {
+            "category": "Admissions", 
+            "question": "What is the CAT cutoff for IISc M.Mgt?",
+            "expected_keywords": ["98.8", "percentile", "cutoff", "general"]
+        },
+        {
+            "category": "Admissions",
+            "question": "Is work experience required for admission?",
+            "expected_keywords": ["not mandatory", "no formal advantage", "help during interviews"]
+        },
+        
+        # Academic Questions
+        {
+            "category": "Academics",
+            "question": "What is the course structure of M.Mgt program?",
+            "expected_keywords": ["64 credits", "hard core", "stream core", "electives", "project"]
+        },
+        {
+            "category": "Academics",
+            "question": "What courses are offered in the curriculum?",
+            "expected_keywords": ["probability", "statistics", "operations", "marketing", "economics"]
+        },
+        {
+            "category": "Academics",
+            "question": "What is the class schedule like?",
+            "expected_keywords": ["4 days", "monday to thursday", "9:30 AM to 2 PM", "fridays"]
+        },
+        
+        # Placement Questions
+        {
+            "category": "Placements",
+            "question": "What is the average placement package?",
+            "expected_keywords": ["₹27 LPA", "average", "ctc", "placement"]
+        },
+        {
+            "category": "Placements",
+            "question": "Which companies recruit from IISc M.Mgt?",
+            "expected_keywords": ["wells fargo", "jpmc", "uber", "quantum street", "companies"]
+        },
+        {
+            "category": "Placements",
+            "question": "What types of roles do graduates get?",
+            "expected_keywords": ["data science", "quantitative finance", "ai research", "analytics"]
+        },
+        
+        # Financial Questions
+        {
+            "category": "Finances",
+            "question": "What is the tuition fee for the program?",
+            "expected_keywords": ["₹2,50,000", "per year", "tuition", "fee"]
+        },
+        {
+            "category": "Finances",
+            "question": "Are scholarships available?",
+            "expected_keywords": ["no institute scholarships", "external scholarships", "assistantships"]
+        },
+        
+        # Campus Life Questions
+        {
+            "category": "Campus Life",
+            "question": "What are the accommodation facilities?",
+            "expected_keywords": ["single-room", "hostel", "campus", "library", "canteens"]
+        },
+        {
+            "category": "Campus Life",
+            "question": "What is the overall student experience like?",
+            "expected_keywords": ["chill", "balanced", "ample free time", "vibrant campus"]
+        },
+        
+        # Specific Technical Questions
+        {
+            "category": "Admissions",
+            "question": "What is the interview process like?",
+            "expected_keywords": ["statistics", "math", "probability", "group discussion", "coding"]
+        },
+        {
+            "category": "Academics",
+            "question": "What electives are available?",
+            "expected_keywords": ["macroeconomics", "deep learning", "entrepreneurship", "simulation"]
+        },
+        {
+            "category": "Placements",
+            "question": "Do candidates from specific backgrounds get higher packages?",
+            "expected_keywords": ["cse", "it", "sde", "above ₹30 LPA", "engineering"]
+        }
+    ]
 
-def test_enhanced_qa_system():
-    """Test the enhanced QA system with various query types"""
+def initialize_qa_system():
+    """Initialize the QA system with all data sources"""
+    print("🚀 Initializing QA system...")
     
-    print("🧪 Testing Enhanced QA System Logic")
-    print("=" * 50)
-    
-    # Initialize enhanced configuration
+    # Create configuration
     config = QAConfig(
-        enable_query_expansion=True,
-        enable_context_reranking=True,
-        context_fusion_strategy="intelligent",
-        answer_quality_threshold=0.15,
+        use_ai_generation=False,  # Disable AI generation for testing
+        min_confidence=0.1,
         max_search_results=8
     )
     
-    # Initialize components
-    print("📋 Initializing enhanced QA system...")
+    # Initialize context agent
     context_agent = ContextAgent(config)
     
-    # Add data sources
-    print("📊 Loading data sources...")
-    try:
-        context_agent.add_source(JSONContentSource("backend/context.json"))
-        print(f"✅ Loaded {len(context_agent.get_faq_data())} FAQ entries")
-    except Exception as e:
-        print(f"❌ Failed to load data: {e}")
-        return False
+    # Add JSON FAQ source
+    context_agent.add_source(JSONContentSource("backend/context.json"))
     
-    # Build semantic index with optimized model
-    print("🔍 Building semantic index...")
-    try:
-        # Use a lightweight model for testing
-        embedder = SentenceTransformer("all-MiniLM-L6-v2")
-        context_agent.build_semantic_search_index(embedder)
-        print("✅ Semantic index built successfully")
-    except Exception as e:
-        print(f"❌ Failed to build index: {e}")
-        return False
+    # Add structured FAQ data
+    from backend.faq_data import FAQ_DATA
+    faq_count = 0
+    for category, questions in FAQ_DATA.items():
+        for question, answer in questions.items():
+            faq_entry = {
+                "question": question,
+                "answer": answer.strip(),
+                "metadata": {
+                    "source": "json",
+                    "category": category,
+                    "type": "faq"
+                }
+            }
+            context_agent.faq_data.append(faq_entry)
+            faq_count += 1
+    
+    print(f"📚 Loaded {faq_count} FAQ entries from {len(FAQ_DATA)} categories")
+    
+    # Initialize embedding model
+    print("🔍 Loading embedding model...")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    embedder = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+    context_agent.build_semantic_search_index(embedder)
     
     # Initialize QA agent
-    print("🤖 Initializing enhanced QA agent...")
-    try:
-        qa_agent = QAAgent(device=-1, config=config)  # CPU mode for testing
-        print("✅ QA agent initialized")
-    except Exception as e:
-        print(f"❌ Failed to initialize QA agent: {e}")
-        return False
+    print("🤖 Initializing QA agent...")
+    qa_agent = QAAgent(device=-1, config=config)  # Use CPU for testing
     
-    # Test queries with different types and complexities
-    test_queries = [
-        # Eligibility queries
-        {
-            "query": "What are the eligibility criteria for M.Mgt?",
-            "type": "eligibility",
-            "expected_keywords": ["degree", "bachelor", "engineering", "60%", "marks"]
-        },
-        {
-            "query": "What is the minimum CGPA required?",
-            "type": "eligibility", 
-            "expected_keywords": ["cgpa", "minimum", "60%"]
-        },
-        
-        # Placement queries
-        {
-            "query": "What is the average placement package?",
-            "type": "placement",
-            "expected_keywords": ["ctc", "salary", "average", "lpa", "₹"]
-        },
-        {
-            "query": "Which companies recruit from IISc M.Mgt?",
-            "type": "placement",
-            "expected_keywords": ["companies", "wells fargo", "jpmc", "uber"]
-        },
-        
-        # Admission queries
-        {
-            "query": "What is the CAT cutoff for general category?",
-            "type": "admission",
-            "expected_keywords": ["cat", "percentile", "98.8", "cutoff"]
-        },
-        
-        # Curriculum queries
-        {
-            "query": "How many credits are required for the program?",
-            "type": "curriculum",
-            "expected_keywords": ["credits", "64", "total"]
-        },
-        
-        # Campus life queries
-        {
-            "query": "What is student life like at IISc?",
-            "type": "campus",
-            "expected_keywords": ["campus", "classes", "facilities", "accommodation"]
-        },
-        
-        # Complex/specific queries
-        {
-            "query": "Tell me about the interview process and what to expect",
-            "type": "interview",
-            "expected_keywords": ["interview", "group discussion", "math", "probability"]
-        }
-    ]
+    return context_agent, qa_agent
+
+def evaluate_answer_quality(answer: str, expected_keywords: List[str]) -> Dict[str, Any]:
+    """Evaluate the quality of an answer"""
+    answer_lower = answer.lower()
     
-    print("\n🎯 Testing Enhanced Query Processing")
-    print("-" * 40)
+    # Check for expected keywords
+    found_keywords = []
+    missing_keywords = []
+    for keyword in expected_keywords:
+        if keyword.lower() in answer_lower:
+            found_keywords.append(keyword)
+        else:
+            missing_keywords.append(keyword)
     
+    # Calculate keyword coverage
+    keyword_coverage = len(found_keywords) / len(expected_keywords) if expected_keywords else 0
+    
+    # Check answer length
+    word_count = len(answer.split())
+    length_score = 1.0 if 10 <= word_count <= 100 else 0.5 if 5 <= word_count <= 150 else 0.2
+    
+    # Check for domain relevance
+    domain_terms = ['iisc', 'm.mgt', 'management', 'bangalore', 'placement', 'ctc', 'curriculum']
+    domain_relevance = sum(1 for term in domain_terms if term in answer_lower) / len(domain_terms)
+    
+    # Check for specific information
+    has_numbers = any(char.isdigit() for char in answer)
+    has_specific_terms = any(term in answer_lower for term in ['specific', 'include', 'consist', 'require'])
+    
+    # Overall quality score
+    quality_score = (
+        keyword_coverage * 0.4 +
+        length_score * 0.2 +
+        domain_relevance * 0.2 +
+        (0.1 if has_numbers else 0.0) +
+        (0.1 if has_specific_terms else 0.0)
+    )
+    
+    return {
+        "keyword_coverage": keyword_coverage,
+        "found_keywords": found_keywords,
+        "missing_keywords": missing_keywords,
+        "word_count": word_count,
+        "length_score": length_score,
+        "domain_relevance": domain_relevance,
+        "has_numbers": has_numbers,
+        "has_specific_terms": has_specific_terms,
+        "quality_score": quality_score
+    }
+
+def run_tests():
+    """Run comprehensive tests on the QA system"""
+    print("🧪 Starting QA System Tests")
+    print("=" * 60)
+    
+    # Initialize system
+    context_agent, qa_agent = initialize_qa_system()
+    
+    # Get test questions
+    test_cases = test_questions()
+    
+    # Results storage
     results = []
-    total_time = 0
+    total_quality_score = 0
     
-    for i, test_case in enumerate(test_queries, 1):
-        query = test_case["query"]
-        query_type = test_case["type"]
+    print(f"\n📝 Testing {len(test_cases)} questions...")
+    print("-" * 60)
+    
+    for i, test_case in enumerate(test_cases, 1):
+        category = test_case["category"]
+        question = test_case["question"]
         expected_keywords = test_case["expected_keywords"]
         
-        print(f"\n{i}. Testing {query_type} query:")
-        print(f"   Query: {query}")
+        print(f"\n{i:2d}. [{category}] {question}")
+        print("-" * 50)
         
         # Process query
         start_time = time.time()
-        try:
-            response = qa_agent.process_query(query, context_agent, top_k=5)
-            processing_time = time.time() - start_time
-            total_time += processing_time
-            
-            answer = response.get("answer", "")
-            confidence = response.get("confidence", 0.0)
-            metadata = response.get("metadata", {})
-            
-            print(f"   Answer: {answer[:100]}{'...' if len(answer) > 100 else ''}")
-            print(f"   Confidence: {confidence:.3f}")
-            print(f"   Processing time: {processing_time:.3f}s")
-            print(f"   Method: {metadata.get('method', 'unknown')}")
-            
-            # Evaluate answer quality
-            quality_score = evaluate_answer_quality(answer, expected_keywords, query_type)
-            print(f"   Quality score: {quality_score:.2f}/5.0")
-            
-            results.append({
-                "query": query,
-                "type": query_type,
-                "answer": answer,
-                "confidence": confidence,
-                "quality_score": quality_score,
-                "processing_time": processing_time,
-                "method": metadata.get('method', 'unknown')
-            })
-            
-        except Exception as e:
-            print(f"   ❌ Error: {e}")
-            results.append({
-                "query": query,
-                "type": query_type,
-                "error": str(e),
-                "quality_score": 0.0,
-                "processing_time": 0.0
-            })
-    
-    # Generate summary report
-    print("\n📊 Enhanced QA System Performance Report")
-    print("=" * 50)
-    
-    successful_queries = [r for r in results if "error" not in r]
-    failed_queries = [r for r in results if "error" in r]
-    
-    if successful_queries:
-        avg_confidence = sum(r["confidence"] for r in successful_queries) / len(successful_queries)
-        avg_quality = sum(r["quality_score"] for r in successful_queries) / len(successful_queries)
-        avg_time = sum(r["processing_time"] for r in successful_queries) / len(successful_queries)
+        result = qa_agent.process_query(question, context_agent, top_k=5)
+        processing_time = time.time() - start_time
         
-        print(f"✅ Successful queries: {len(successful_queries)}/{len(test_queries)}")
-        print(f"📈 Average confidence: {avg_confidence:.3f}")
-        print(f"🎯 Average quality score: {avg_quality:.2f}/5.0")
-        print(f"⚡ Average processing time: {avg_time:.3f}s")
-        print(f"🕒 Total processing time: {total_time:.3f}s")
+        # Extract answer
+        answer = result.get("answer", "")
+        confidence = result.get("confidence", 0.0)
         
-        # Method distribution
-        methods = {}
-        for r in successful_queries:
-            method = r.get("method", "unknown")
-            methods[method] = methods.get(method, 0) + 1
+        # Evaluate quality
+        quality_metrics = evaluate_answer_quality(answer, expected_keywords)
         
-        print(f"\n🔧 Answer generation methods:")
-        for method, count in methods.items():
-            print(f"   {method}: {count} queries")
+        # Store results
+        test_result = {
+            "question": question,
+            "category": category,
+            "answer": answer,
+            "confidence": confidence,
+            "processing_time": processing_time,
+            "quality_metrics": quality_metrics
+        }
+        results.append(test_result)
         
-        # Quality by query type
-        print(f"\n📋 Quality by query type:")
-        type_quality = {}
-        for r in successful_queries:
-            qtype = r["type"]
-            if qtype not in type_quality:
-                type_quality[qtype] = []
-            type_quality[qtype].append(r["quality_score"])
+        # Print results
+        print(f"Answer: {answer[:200]}{'...' if len(answer) > 200 else ''}")
+        print(f"Confidence: {confidence:.1%}")
+        print(f"Processing Time: {processing_time:.2f}s")
+        print(f"Quality Score: {quality_metrics['quality_score']:.1%}")
+        print(f"Keyword Coverage: {quality_metrics['keyword_coverage']:.1%}")
+        print(f"Found Keywords: {', '.join(quality_metrics['found_keywords'][:3])}")
+        if quality_metrics['missing_keywords']:
+            print(f"Missing Keywords: {', '.join(quality_metrics['missing_keywords'][:3])}")
         
-        for qtype, scores in type_quality.items():
-            avg_score = sum(scores) / len(scores)
-            print(f"   {qtype}: {avg_score:.2f}/5.0 (n={len(scores)})")
+        total_quality_score += quality_metrics['quality_score']
     
-    if failed_queries:
-        print(f"\n❌ Failed queries: {len(failed_queries)}")
-        for r in failed_queries:
-            print(f"   - {r['query']}: {r['error']}")
+    # Calculate overall statistics
+    avg_quality_score = total_quality_score / len(test_cases)
+    avg_confidence = sum(r["confidence"] for r in results) / len(results)
+    avg_processing_time = sum(r["processing_time"] for r in results) / len(results)
     
-    # Overall assessment
-    success_rate = len(successful_queries) / len(test_queries)
-    if success_rate >= 0.9 and avg_quality >= 3.5:
-        print(f"\n🎉 EXCELLENT: Enhanced QA system performing very well!")
-    elif success_rate >= 0.8 and avg_quality >= 3.0:
-        print(f"\n✅ GOOD: Enhanced QA system performing well with room for improvement")
-    elif success_rate >= 0.6:
-        print(f"\n⚠️ FAIR: Enhanced QA system needs optimization")
+    # Print summary
+    print("\n" + "=" * 60)
+    print("📊 TEST RESULTS SUMMARY")
+    print("=" * 60)
+    print(f"Total Questions Tested: {len(test_cases)}")
+    print(f"Average Quality Score: {avg_quality_score:.1%}")
+    print(f"Average Confidence: {avg_confidence:.1%}")
+    print(f"Average Processing Time: {avg_processing_time:.2f}s")
+    
+    # Category-wise analysis
+    categories = {}
+    for result in results:
+        cat = result["category"]
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(result["quality_metrics"]["quality_score"])
+    
+    print(f"\n📈 Category-wise Performance:")
+    for category, scores in categories.items():
+        avg_score = sum(scores) / len(scores)
+        print(f"  {category}: {avg_score:.1%} ({len(scores)} questions)")
+    
+    # Save detailed results
+    with open("test_results.json", "w") as f:
+        # Convert numpy types to Python types for JSON serialization
+        def convert_numpy_types(obj):
+            if hasattr(obj, 'item'):  # numpy scalar
+                return obj.item()
+            elif isinstance(obj, dict):
+                return {k: convert_numpy_types(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_types(item) for item in obj]
+            else:
+                return obj
+        
+        json.dump({
+            "summary": {
+                "total_questions": len(test_cases),
+                "average_quality_score": float(avg_quality_score),
+                "average_confidence": float(avg_confidence),
+                "average_processing_time": float(avg_processing_time)
+            },
+            "category_performance": {
+                cat: float(sum(scores) / len(scores)) for cat, scores in categories.items()
+            },
+            "detailed_results": convert_numpy_types(results)
+        }, f, indent=2)
+    
+    print(f"\n💾 Detailed results saved to test_results.json")
+    
+    # Quality assessment
+    if avg_quality_score >= 0.8:
+        print("✅ EXCELLENT: System provides high-quality, accurate answers")
+    elif avg_quality_score >= 0.6:
+        print("✅ GOOD: System provides satisfactory answers with room for improvement")
+    elif avg_quality_score >= 0.4:
+        print("⚠️  FAIR: System needs improvement in answer quality")
     else:
-        print(f"\n❌ POOR: Enhanced QA system requires significant improvements")
+        print("❌ POOR: System requires significant improvements")
     
-    return success_rate >= 0.8
-
-
-def evaluate_answer_quality(answer: str, expected_keywords: List[str], query_type: str) -> float:
-    """Evaluate the quality of an answer based on various criteria"""
-    if not answer or len(answer.strip()) < 10:
-        return 0.0
-    
-    score = 0.0
-    answer_lower = answer.lower()
-    
-    # Keyword relevance (0-2 points)
-    keyword_matches = sum(1 for keyword in expected_keywords if keyword.lower() in answer_lower)
-    keyword_score = min(2.0, (keyword_matches / len(expected_keywords)) * 2.0)
-    score += keyword_score
-    
-    # Answer completeness (0-1 point)
-    if len(answer.split()) >= 10:
-        score += 0.5
-    if len(answer.split()) >= 20:
-        score += 0.5
-    
-    # Specificity (0-1 point)
-    import re
-    if re.search(r'\d+|₹|%|specific|exactly|approximately', answer):
-        score += 1.0
-    
-    # Coherence (0-1 point)
-    if answer.endswith(('.', '!', '?')) and not any(phrase in answer_lower for phrase in 
-                                                   ["i don't know", "i cannot", "sorry"]):
-        score += 1.0
-    
-    return min(5.0, score)
-
+    return results
 
 if __name__ == "__main__":
     try:
-        success = test_enhanced_qa_system()
-        sys.exit(0 if success else 1)
-    except KeyboardInterrupt:
-        print("\n\n⚠️ Test interrupted by user")
-        sys.exit(1)
+        results = run_tests()
+        print("\n🎉 Testing completed successfully!")
     except Exception as e:
-        print(f"\n\n❌ Test failed with error: {e}")
+        print(f"\n❌ Testing failed with error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
