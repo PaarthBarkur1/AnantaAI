@@ -65,7 +65,7 @@ def select_relevant_sources(question: str, sources: List[Dict[str, Any]], top_n:
 
 @dataclass
 class QAConfig:
-    """Configuration class for QA system"""
+    """Enhanced configuration class for QA system with adaptive settings"""
     max_length: int = 1024
     max_new_tokens: int = 256
     temperature: float = 0.3  # Balanced - not too rigid, not too creative
@@ -73,6 +73,22 @@ class QAConfig:
     do_sample: bool = True
     context_window: int = 800
     min_confidence: float = 0.05  # Lower threshold for better recall
+    use_ai_generation: bool = True  # Set to False to disable AI model loading
+
+    # Enhanced configuration options
+    embedding_model: str = "auto"  # Auto-select based on resources
+    max_search_results: int = 8  # Increased for better context selection
+    # intelligent, simple, comprehensive
+    context_fusion_strategy: str = "intelligent"
+    answer_quality_threshold: float = 0.15  # Minimum quality for AI answers
+    enable_query_expansion: bool = True  # Enable enhanced query preprocessing
+    enable_context_reranking: bool = True  # Enable intelligent context reranking
+
+    # Performance tuning
+    sentence_extraction_max: int = 4  # Max sentences for extraction
+    # Threshold for avoiding duplicate contexts
+    context_overlap_threshold: float = 0.7
+    numerical_info_boost: float = 1.5  # Boost for numerical information relevance
 
 
 @dataclass
@@ -421,30 +437,170 @@ class ContextAgent:
             f"Built semantic index with {len(self.documents)} documents in {build_time:.2f}s")
 
     def _preprocess_query(self, query: str) -> str:
-        """Preprocess query to improve matching"""
+        """Enhanced query preprocessing with better understanding and expansion"""
         # Convert to lowercase for processing
-        query_lower = query.lower()
+        query_lower = query.lower().strip()
 
-        # Expand common synonyms and related terms
-        synonyms = {
-            "admission requirements": "eligibility criteria application requirements",
-            "admission": "eligibility application",
-            "requirements": "criteria eligibility",
-            "apply": "application admission",
-            "fees": "cost tuition expenses",
-            "placement": "jobs career recruitment",
-            "curriculum": "courses subjects syllabus",
-            "duration": "length time period",
-            "internship": "summer placement industry exposure"
+        # Normalize common variations and typos
+        query_normalized = self._normalize_query(query_lower)
+
+        # Detect basic query type for expansion
+        query_type = self._detect_query_type(query_normalized)
+
+        # Create simple intent structure for compatibility
+        query_intent = {
+            'type': query_type,
+            'specificity': 'general',
+            'information_type': 'factual',
+            'urgency': 'normal'
         }
 
-        # Add synonyms to expand query
+        # Expand with domain-specific synonyms and related terms
+        expanded_query = self._expand_query_with_synonyms(
+            query_normalized, query_intent)
+
+        # Add contextual terms based on query type
+        contextual_query = self._add_contextual_terms(
+            expanded_query, query_intent)
+
+        return contextual_query
+
+    def _normalize_query(self, query: str) -> str:
+        """Normalize query by fixing common variations and typos"""
+        normalizations = {
+            # Common typos and variations
+            'mmgt': 'm.mgt',
+            'mgt': 'm.mgt',
+            'managment': 'management',
+            'eligibilty': 'eligibility',
+            'critria': 'criteria',
+            'placements': 'placement',
+            'curriculam': 'curriculum',
+            'admision': 'admission',
+            'requirments': 'requirements',
+            'internships': 'internship',
+
+            # Standardize terms
+            'iisc bangalore': 'iisc',
+            'indian institute of science': 'iisc',
+            'master of management': 'm.mgt',
+            'masters in management': 'm.mgt',
+            'post graduation': 'postgraduate',
+            'pg': 'postgraduate'
+        }
+
+        normalized = query
+        for wrong, correct in normalizations.items():
+            normalized = normalized.replace(wrong, correct)
+
+        return normalized
+
+    def _detect_query_type(self, query: str) -> str:
+        """Detect the type of query to provide better instructions"""
+        query_lower = query.lower()
+
+        # Define query type patterns
+        patterns = {
+            'eligibility': ['eligibility', 'criteria', 'requirement', 'qualify', 'eligible'],
+            'admission': ['admission', 'apply', 'application', 'deadline', 'cutoff', 'cat', 'gate'],
+            'curriculum': ['course', 'curriculum', 'subject', 'credit', 'semester', 'elective'],
+            'placement': ['placement', 'job', 'salary', 'ctc', 'company', 'recruit'],
+            'fees': ['fee', 'cost', 'tuition', 'expense', 'scholarship', 'financial'],
+            'campus': ['campus', 'hostel', 'accommodation', 'facility', 'life'],
+            'interview': ['interview', 'selection', 'process', 'group discussion'],
+            'duration': ['duration', 'year', 'time', 'long', 'period']
+        }
+
+        for query_type, keywords in patterns.items():
+            if any(keyword in query_lower for keyword in keywords):
+                return query_type
+
+        return 'general'
+
+    def _expand_query_with_synonyms(self, query: str, intent: dict) -> str:
+        """Expand query with comprehensive synonyms and related terms"""
+        # Enhanced synonym dictionary with more comprehensive mappings
+        synonyms = {
+            # Admission related
+            "admission": "eligibility application apply entrance selection",
+            "eligibility": "criteria requirements qualification minimum",
+            "requirements": "criteria eligibility prerequisites conditions",
+            "apply": "application admission registration enrollment",
+            "cutoff": "percentile score marks minimum threshold",
+            "deadline": "last date application window timeline",
+
+            # Academic related
+            "curriculum": "courses subjects syllabus academic program structure",
+            "courses": "subjects curriculum academic modules classes",
+            "credits": "credit hours academic units course load",
+            "semester": "term academic period duration",
+            "electives": "optional courses choice subjects specialization",
+            "core": "mandatory required compulsory essential",
+
+            # Career related
+            "placement": "jobs career recruitment employment opportunities",
+            "salary": "ctc package compensation pay remuneration",
+            "companies": "recruiters employers organizations firms",
+            "internship": "summer placement industry exposure training",
+
+            # Financial
+            "fees": "cost tuition expenses charges financial",
+            "scholarship": "financial aid funding assistance support",
+
+            # Campus life
+            "campus": "college institute university facilities infrastructure",
+            "hostel": "accommodation residence housing dormitory",
+            "facilities": "amenities infrastructure resources services",
+
+            # Time related
+            "duration": "length time period years semesters",
+            "schedule": "timetable timing classes academic calendar"
+        }
+
         expanded_query = query
+
+        # Add synonyms based on detected terms
         for term, expansion in synonyms.items():
-            if term in query_lower:
-                expanded_query += " " + expansion
+            if term in query:
+                # Weight expansion based on intent specificity
+                if intent['specificity'] == 'specific':
+                    # For specific queries, add fewer but more relevant terms
+                    expansion_words = expansion.split()[:3]
+                else:
+                    # For general queries, add more comprehensive terms
+                    expansion_words = expansion.split()
+
+                expanded_query += " " + " ".join(expansion_words)
 
         return expanded_query
+
+    def _add_contextual_terms(self, query: str, intent: dict) -> str:
+        """Add contextual terms based on query type and intent"""
+        contextual_terms = {
+            'eligibility': ['bachelor degree engineering technology 60% marks cgpa'],
+            'admission': ['cat gate percentile application process selection'],
+            'curriculum': ['management analytics operations marketing finance'],
+            'placement': ['data science analytics consulting technology companies'],
+            'fees': ['tuition semester payment installment financial'],
+            'campus': ['iisc bangalore facilities hostel single room'],
+            'interview': ['group discussion written test math probability'],
+            'duration': ['two year full time postgraduate program']
+        }
+
+        query_type = intent['type']
+        if query_type in contextual_terms:
+            # Add contextual terms based on intent urgency
+            terms = contextual_terms[query_type]
+            if intent['urgency'] == 'urgent':
+                # For urgent queries, add specific actionable terms
+                contextual_query = query + " " + " ".join(terms[:2])
+            else:
+                # For normal queries, add comprehensive context
+                contextual_query = query + " " + " ".join(terms)
+        else:
+            contextual_query = query
+
+        return contextual_query
 
     def search(self, query: str, top_k: int = 5) -> List[SearchResult]:
         """Enhanced search with confidence scoring and query preprocessing"""
@@ -464,8 +620,8 @@ class ContextAgent:
         if query_emb.ndim == 1:
             query_emb = query_emb.reshape(1, -1)
 
-        # Search with more candidates for reranking
-        search_k = min(top_k * 2, len(self.faq_data))
+        # Search with more candidates for reranking (enhanced)
+        search_k = min(self.config.max_search_results, len(self.faq_data))
         # query_emb: shape (1, dim), search_k: int
         # FAISS search
         distances, indices = self.index.search(query_emb, int(search_k))
@@ -527,15 +683,30 @@ class QAAgent:
         self.config = config or QAConfig()
         self.device = device
 
-        # Initialize tokenizer for Qwen2.5
+        # Initialize AI generation flags
+        self.use_ai_generation = False
+        self.use_qa_pipeline = False  # Flag to track if using Q&A pipeline vs text generation
+        self.generator = None
+        self.tokenizer = None
+
+        # Check if AI generation is disabled
+        if not self.config.use_ai_generation:
+            self.use_ai_generation = False
+            logger.info(
+                "AI generation disabled - using context extraction only")
+            print("⚠️  AI generation disabled - using context extraction only")
+            return
+
+        # Initialize tokenizer for Q&A model
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                "Qwen/Qwen2.5-0.5B-Instruct")
+            # Use FLAN-T5 which is designed for instruction following and Q&A
+            model_name = "google/flan-t5-small"  # Better for Q&A than DialoGPT
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
-            logger.info("Successfully loaded Qwen2.5 tokenizer")
+            logger.info(f"Successfully loaded {model_name} tokenizer")
         except Exception as e:
-            logger.error(f"Failed to load Qwen tokenizer: {e}")
+            logger.error(f"Failed to load tokenizer: {e}")
             # Fallback to context extraction only
             self.use_ai_generation = False
             logger.info("Falling back to context extraction mode")
@@ -559,31 +730,26 @@ class QAAgent:
         torch_device = f"cuda:{self.device}" if self.device >= 0 else "cpu"
         logger.info(f"Device map: {device_map}, torch device: {torch_device}")
 
-        # Initialize Qwen2.5 generation pipeline
+        # Initialize FLAN-T5 generation pipeline
         try:
             pipeline_kwargs = {
-                "task": "text-generation",
-                "model": "Qwen/Qwen2.5-0.5B-Instruct",
+                "task": "text2text-generation",  # FLAN-T5 uses text2text-generation
+                # FLAN-T5 model for better Q&A performance
+                "model": "google/flan-t5-small",
                 "tokenizer": self.tokenizer,
-                "max_new_tokens": self.config.max_new_tokens,
-                "temperature": self.config.temperature,
-                "top_p": self.config.top_p,
-                "do_sample": self.config.do_sample,
-                "pad_token_id": self.tokenizer.pad_token_id,
-                "eos_token_id": self.tokenizer.eos_token_id,
-                "return_full_text": False,
-                "trust_remote_code": True  # Required for Qwen models
+                # FLAN-T5 works well with shorter outputs
+                "max_new_tokens": min(100, self.config.max_new_tokens),
+                "temperature": 0.3,  # Lower temperature for more factual responses
+                "top_p": 0.9,
+                "do_sample": True,
+                "return_full_text": False
             }
 
             # Add GPU-specific optimizations
             if self.device >= 0:
                 pipeline_kwargs.update({
                     "device_map": "auto",  # Automatic GPU placement
-                    "torch_dtype": torch.float16,  # Use FP16 for faster inference
-                    "model_kwargs": {
-                        "low_cpu_mem_usage": True  # Reduce CPU memory usage
-                        # Removed duplicate torch_dtype from model_kwargs
-                    }
+                    "torch_dtype": torch.float16  # Use FP16 for faster inference
                 })
                 print("✓ Using GPU optimizations (FP16, auto device mapping)")
             else:
@@ -593,11 +759,45 @@ class QAAgent:
             self.generator = pipeline(**pipeline_kwargs)
             self.use_ai_generation = True
             logger.info(
-                "Successfully initialized Qwen2.5 model for text generation")
+                "Successfully initialized FLAN-T5-small model for text generation")
         except Exception as e:
-            logger.error(f"Failed to initialize Qwen2.5 model: {e}")
-            self.use_ai_generation = False
-            logger.info("Falling back to context extraction mode")
+            logger.error(f"Failed to initialize FLAN-T5-small model: {e}")
+            # Try with an even smaller model as fallback
+            try:
+                logger.info("Trying with DistilBERT Q&A model...")
+                pipeline_kwargs = {
+                    "task": "question-answering",  # Use Q&A pipeline for DistilBERT
+                    "model": "distilbert-base-cased-distilled-squad",  # Smaller Q&A model
+                    "tokenizer": AutoTokenizer.from_pretrained("distilbert-base-cased-distilled-squad"),
+                    "max_answer_len": 100,
+                    "return_full_text": False
+                }
+
+                if pipeline_kwargs["tokenizer"].pad_token is None:
+                    pipeline_kwargs["tokenizer"].pad_token = pipeline_kwargs["tokenizer"].eos_token
+
+                # Add GPU-specific optimizations
+                if self.device >= 0:
+                    pipeline_kwargs.update({
+                        "device_map": "auto",
+                        "torch_dtype": torch.float16
+                    })
+                else:
+                    pipeline_kwargs["device"] = "cpu"
+
+                self.generator = pipeline(**pipeline_kwargs)
+                self.use_ai_generation = True
+                self.use_qa_pipeline = True  # Flag to indicate we're using Q&A pipeline
+                logger.info("Successfully initialized DistilBERT Q&A model")
+            except Exception as e2:
+                logger.error(f"Failed to initialize fallback model: {e2}")
+                # Final fallback: context extraction only
+                self.use_ai_generation = False
+                logger.info(
+                    "Using context extraction mode only - no AI generation")
+                print("⚠️  Using context extraction mode only (no AI generation)")
+                print(
+                    "   This will provide answers based on exact text matches from the knowledge base.")
 
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text"""
@@ -607,220 +807,834 @@ class QAAgent:
             # Fallback: rough estimation
             return int(len(text.split()) * 1.3)
 
-    def _create_qwen_prompt(self, query: str, context: str) -> str:
-        """Create a proper prompt for Qwen2.5 model with professional, concise style"""
-        return f"""<|im_start|>system
-You are a professional admissions advisor for the IISc M.Mgt program. Provide clear, accurate, and concise answers based on the given context.
+    def _truncate_context_intelligently(self, context: str, max_length: int = 800) -> str:
+        """Truncate context while preserving complete sentences and important information"""
+        if len(context) <= max_length:
+            return context
 
-Guidelines:
-- Be direct and professional
-- Answer the specific question asked
-- Use bullet points for lists when appropriate
-- Keep responses focused and to the point
-- Include only relevant information from the context
-- Avoid unnecessary elaboration or fluff
-<|im_end|>
-<|im_start|>user
-Context: {context[:800]}
+        # Split into sentences
+        sentences = []
+        for sent in context.split('.'):
+            sent = sent.strip()
+            if sent:
+                sentences.append(sent + '.')
+
+        # Build truncated context by adding complete sentences
+        truncated = ""
+        for sentence in sentences:
+            if len(truncated + sentence) <= max_length:
+                truncated += sentence + " "
+            else:
+                break
+
+        return truncated.strip()
+
+    def _detect_query_type(self, query: str) -> str:
+        """Detect the type of query to provide better instructions"""
+        query_lower = query.lower()
+
+        # Define query type patterns
+        patterns = {
+            'eligibility': ['eligibility', 'criteria', 'requirement', 'qualify', 'eligible'],
+            'admission': ['admission', 'apply', 'application', 'deadline', 'cutoff', 'cat', 'gate'],
+            'curriculum': ['course', 'curriculum', 'subject', 'credit', 'semester', 'elective'],
+            'placement': ['placement', 'job', 'salary', 'ctc', 'company', 'recruit'],
+            'fees': ['fee', 'cost', 'tuition', 'expense', 'scholarship', 'financial'],
+            'campus': ['campus', 'hostel', 'accommodation', 'facility', 'life'],
+            'interview': ['interview', 'selection', 'process', 'group discussion'],
+            'duration': ['duration', 'year', 'time', 'long', 'period']
+        }
+
+        for query_type, keywords in patterns.items():
+            if any(keyword in query_lower for keyword in keywords):
+                return query_type
+
+        return 'general'
+
+    def _get_domain_instructions(self, query_type: str) -> str:
+        """Get domain-specific instructions based on query type"""
+        instructions = {
+            'eligibility': "Focus on specific degree requirements, marks/CGPA criteria, and any additional qualifications needed.",
+            'admission': "Include specific percentiles, deadlines, application procedures, and required documents.",
+            'curriculum': "Detail course names, credit structure, core vs elective courses, and any specialization options.",
+            'placement': "Provide specific salary figures, company names, placement statistics, and role types.",
+            'fees': "Include exact fee amounts, payment schedules, and any available financial aid information.",
+            'campus': "Describe facilities, accommodation options, campus life, and student experiences.",
+            'interview': "Explain the interview format, typical questions, preparation tips, and selection criteria.",
+            'duration': "Specify exact time periods, semester structure, and any flexibility in program length.",
+            'general': "Provide comprehensive information relevant to the IISc M.Mgt program."
+        }
+
+        return instructions.get(query_type, instructions['general'])
+
+    def _analyze_query_intent(self, query: str) -> dict:
+        """Analyze query to understand user intent and information needs"""
+        intent = {
+            'type': 'general',
+            'specificity': 'general',  # specific, general, broad
+            'information_type': 'factual',  # factual, procedural, comparative
+            'urgency': 'normal'  # urgent, normal, exploratory
+        }
+
+        # Detect question type
+        if any(word in query for word in ['what', 'which', 'who']):
+            intent['information_type'] = 'factual'
+        elif any(word in query for word in ['how', 'when', 'where']):
+            intent['information_type'] = 'procedural'
+        elif any(word in query for word in ['compare', 'difference', 'vs', 'versus']):
+            intent['information_type'] = 'comparative'
+
+        # Detect specificity
+        if any(word in query for word in ['specific', 'exact', 'precise', 'detailed']):
+            intent['specificity'] = 'specific'
+        elif any(word in query for word in ['overview', 'general', 'about', 'tell me']):
+            intent['specificity'] = 'broad'
+
+        # Detect urgency/importance
+        if any(word in query for word in ['urgent', 'important', 'deadline', 'last date']):
+            intent['urgency'] = 'urgent'
+        elif any(word in query for word in ['explore', 'learn', 'understand', 'know more']):
+            intent['urgency'] = 'exploratory'
+
+        # Detect primary topic
+        intent['type'] = self._detect_query_type(query)
+
+        return intent
+
+    def _create_qwen_prompt(self, query: str, context: str) -> str:
+        """Create an instruction prompt for FLAN-T5"""
+        # Truncate context to a reasonable length for FLAN-T5
+        truncated_context = self._truncate_context_intelligently(
+            context, max_length=500)
+
+        # Create an instruction-style prompt that FLAN-T5 can handle well
+        return f"""Answer the following question based on the provided context. Be specific and factual.
+
+Context: {truncated_context}
 
 Question: {query}
 
-Provide a clear, professional answer:
-<|im_end|>
-<|im_start|>assistant
-"""
+Answer:"""
 
     def _clean_qwen_output(self, text: str) -> str:
-        """Clean Qwen model output"""
-        # Remove special tokens
-        text = text.replace("<|im_start|>", "").replace("<|im_end|>", "")
-        text = text.replace("<|endoftext|>", "")
+        """Clean FLAN-T5 model output with minimal processing to preserve content"""
+        if not text:
+            return ""
 
-        # Clean up any remaining artifacts
+        # FLAN-T5 typically produces cleaner output, minimal cleaning needed
+        text = text.replace("<pad>", "").replace(
+            "</s>", "").replace("<unk>", "")
+
+        # Remove only leading/trailing whitespace, preserve internal formatting
         text = text.strip()
 
-        # Ensure proper sentence ending
-        if text and not text.endswith(('.', '!', '?')):
-            text += '.'
+        # FLAN-T5 usually produces complete sentences, but add period if needed
+        if text and len(text) > 3 and not text.endswith(('.', '!', '?', ':', ';')):
+            # Check if it looks like a complete thought before adding period
+            if not text.endswith(('...', '--', '-')):
+                text += '.'
 
         return text
 
     def _validate_answer_grounding(self, answer: str, context: str) -> bool:
-        """Check if the answer is reasonable and not obviously hallucinated"""
+        """Enhanced validation to check if the answer is reasonable and well-grounded"""
         if not answer or not context:
             return False
 
-        # Very basic validation - just check for obvious issues
         answer_lower = answer.lower()
+        context_lower = context.lower()
 
         # Reject answers that are clearly problematic
         problematic_phrases = [
-            "i am an ai",
-            "i cannot",
-            "as an ai",
-            "i don't know",
-            "sorry, i cannot"
+            "i am an ai", "i cannot", "as an ai", "i don't know",
+            "sorry, i cannot", "i'm sorry, but i don't have access to",
+            "i don't have enough information", "i cannot provide specific information",
+            "i'm not sure", "i'm unable to", "i can't help", "i don't have access"
         ]
 
         # If answer contains problematic phrases, reject
         if any(phrase in answer_lower for phrase in problematic_phrases):
             return False
 
-        # Check if answer is too short or too generic
-        if len(answer.split()) < 5:
+        # Check basic quality metrics
+        if len(answer.split()) < 3 or len(answer) < 15:
             return False
 
-        # Basic check - answer should have some overlap with context
-        answer_words = set(answer_lower.split())
-        context_words = set(context.lower().split())
-        overlap = len(answer_words.intersection(context_words))
-        overlap_ratio = overlap / len(answer_words) if answer_words else 0
+        # Check for basic sentence structure
+        if not any(char in answer for char in ['.', '!', '?', ':', ';']):
+            return False
 
-        # Very lenient threshold - just catch obvious hallucinations
-        return overlap_ratio > 0.15
+        # Enhanced grounding check - verify answer relates to context
+        grounding_score = self._calculate_grounding_score(
+            answer_lower, context_lower)
+
+        # Check for domain relevance (IISc M.Mgt specific)
+        domain_relevance = self._check_domain_relevance(answer_lower)
+
+        # Check for numerical information (often indicates specific, useful answers)
+        has_numerical_info = self._has_numerical_information(answer_lower)
+
+        # More lenient validation - accept if ANY of these conditions are met:
+        # 1. Decent grounding score (lowered threshold)
+        # 2. Domain relevant content
+        # 3. Contains numerical information (percentages, numbers, etc.)
+        # 4. Reasonable length and structure (already checked above)
+
+        if grounding_score >= 0.15:  # Lowered from 0.2 to 0.15
+            return True
+        elif domain_relevance:
+            return True
+        elif has_numerical_info and grounding_score >= 0.05:  # Very low threshold if has numbers
+            return True
+        # Longer answers with minimal grounding
+        elif len(answer.split()) >= 8 and grounding_score >= 0.08:
+            return True
+        else:
+            return False
+
+    def _validate_answer_grounding_with_details(self, answer: str, context: str) -> tuple[bool, str]:
+        """Enhanced validation with detailed feedback for debugging"""
+        if not answer or not context:
+            return False, "Empty answer or context"
+
+        answer_lower = answer.lower()
+        context_lower = context.lower()
+
+        # Check for problematic phrases
+        problematic_phrases = [
+            "i am an ai", "i cannot", "as an ai", "i don't know",
+            "sorry, i cannot", "i'm sorry, but i don't have access to",
+            "i don't have enough information", "i cannot provide specific information",
+            "i'm not sure", "i'm unable to", "i can't help", "i don't have access"
+        ]
+
+        for phrase in problematic_phrases:
+            if phrase in answer_lower:
+                return False, f"Contains problematic phrase: '{phrase}'"
+
+        # Check basic quality metrics
+        word_count = len(answer.split())
+        if word_count < 3:
+            return False, f"Too short: {word_count} words"
+
+        if len(answer) < 15:
+            return False, f"Too short: {len(answer)} characters"
+
+        # Check for basic sentence structure
+        if not any(char in answer for char in ['.', '!', '?', ':', ';']):
+            return False, "No proper sentence ending punctuation"
+
+        # Calculate scores
+        grounding_score = self._calculate_grounding_score(
+            answer_lower, context_lower)
+        domain_relevance = self._check_domain_relevance(answer_lower)
+        has_numerical_info = self._has_numerical_information(answer_lower)
+
+        # Apply lenient validation logic
+        if grounding_score >= 0.15:
+            return True, f"Good grounding score: {grounding_score:.3f}"
+        elif domain_relevance:
+            return True, f"Domain relevant (grounding: {grounding_score:.3f})"
+        elif has_numerical_info and grounding_score >= 0.05:
+            return True, f"Has numerical info (grounding: {grounding_score:.3f})"
+        elif word_count >= 8 and grounding_score >= 0.08:
+            return True, f"Long answer with minimal grounding: {word_count} words (grounding: {grounding_score:.3f})"
+        else:
+            return False, f"Low grounding score: {grounding_score:.3f}, domain_relevant: {domain_relevance}, has_numbers: {has_numerical_info}, words: {word_count}"
+
+    def _calculate_grounding_score(self, answer: str, context: str) -> float:
+        """Calculate how well the answer is grounded in the provided context with improved scoring"""
+        answer_words = set(answer.split())
+        context_words = set(context.split())
+
+        # Remove common stop words for better matching
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been',
+                      'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those'}
+
+        answer_content_words = answer_words - stop_words
+        context_content_words = context_words - stop_words
+
+        if not answer_content_words:
+            return 0.0
+
+        # Calculate multiple types of overlap for better scoring
+        exact_overlap = len(
+            answer_content_words.intersection(context_content_words))
+
+        # Also check for partial word matches (for variations like "eligibility" vs "eligible")
+        partial_matches = 0
+        for answer_word in answer_content_words:
+            for context_word in context_content_words:
+                # Check if words share a common root (at least 4 characters)
+                if len(answer_word) >= 4 and len(context_word) >= 4:
+                    if answer_word[:4] == context_word[:4] or answer_word[-4:] == context_word[-4:]:
+                        partial_matches += 0.5
+                        break
+
+        # Calculate weighted score
+        total_matches = exact_overlap + partial_matches
+        base_score = total_matches / len(answer_content_words)
+
+        # Boost score for answers with important domain terms
+        domain_boost = 0.0
+        important_terms = {'iisc', 'management', 'eligibility',
+                           'admission', 'placement', 'ctc', 'percentile', 'cgpa', 'credits'}
+        for term in important_terms:
+            if term in answer.lower() and term in context.lower():
+                domain_boost += 0.05
+
+        return min(1.0, base_score + domain_boost)
+
+    def _check_domain_relevance(self, answer: str) -> bool:
+        """Check if answer contains domain-relevant terms for IISc M.Mgt"""
+        domain_terms = {
+            'iisc', 'management', 'mgt', 'm.mgt', 'bangalore', 'indian institute of science',
+            'engineering', 'technology', 'analytics', 'data science', 'placement', 'ctc',
+            'gate', 'cat', 'percentile', 'eligibility', 'admission', 'curriculum', 'credits',
+            'semester', 'internship', 'thesis', 'project', 'campus', 'hostel', 'fee'
+        }
+
+        answer_words = set(answer.split())
+        return len(answer_words.intersection(domain_terms)) >= 1
+
+    def _has_numerical_information(self, answer: str) -> bool:
+        """Check if answer contains numerical information that indicates specificity"""
+        import re
+
+        # Look for various types of numerical information
+        numerical_patterns = [
+            r'\d+%',  # Percentages
+            r'\d+\.\d+',  # Decimal numbers
+            r'₹[\d,]+',  # Currency amounts
+            r'\d+\s*lpa',  # Salary in LPA
+            r'\d+\s*lakhs?',  # Lakhs
+            r'\d+\s*crores?',  # Crores
+            r'\d+\s*years?',  # Years
+            r'\d+\s*months?',  # Months
+            r'\d+\s*credits?',  # Credits
+            r'\d+\s*semesters?',  # Semesters
+            r'\d+\s*percentile',  # Percentiles
+            r'\d+\s*marks?',  # Marks
+            r'\d+\s*cgpa',  # CGPA
+            r'\d{4}',  # Years (4 digits)
+        ]
+
+        return any(re.search(pattern, answer, re.IGNORECASE) for pattern in numerical_patterns)
 
     def _extract_relevant_sentences(self, query: str, text: str, max_sentences: int = 4) -> str:
-        """Extract the most relevant sentences from a large text block"""
+        """Enhanced sentence extraction with better relevance scoring and context awareness"""
         if not text:
             return ""
 
         query_lower = query.lower()
         query_words = set(word.lower()
                           for word in query.split() if len(word) > 2)
+        query_type = self._detect_query_type(query)
 
-        # Split text into sentences
-        sentences = []
-        for sent in text.split('.'):
-            sent = sent.strip()
-            if len(sent) > 20:  # Minimum meaningful sentence length
-                sentences.append(sent)
+        # Split text into sentences more intelligently
+        sentences = self._split_into_sentences(text)
 
-        # Score each sentence based on relevance
+        if not sentences:
+            return ""
+
+        # Score each sentence with enhanced algorithm
         sentence_scores = []
         for i, sentence in enumerate(sentences):
-            sentence_lower = sentence.lower()
-            sentence_words = set(sentence_lower.split())
+            score = self._calculate_sentence_relevance_score(
+                sentence, query_words, query_type, query_lower, i, len(
+                    sentences)
+            )
+            sentence_scores.append((sentence, score, i))
 
-            # Calculate different types of matches
-            exact_matches = sum(
-                1 for word in query_words if word in sentence_lower)
-            word_overlap = len(query_words.intersection(sentence_words))
-
-            # Bonus for sentences that contain key terms
-            key_terms = {
-                'eligibility': ['degree', 'bachelor', 'engineering', 'marks', 'cgpa'],
-                'placement': ['ctc', 'salary', 'companies', 'placed', 'offers'],
-                'interview': ['interview', 'questions', 'math', 'probability', 'discussion'],
-                'student life': ['campus', 'classes', 'facilities', 'accommodation'],
-                'curriculum': ['courses', 'credits', 'subjects', 'electives'],
-                'admission': ['percentile', 'cutoff', 'cat', 'gate']
-            }
-
-            bonus_score = 0
-            for category, terms in key_terms.items():
-                if any(term in query_lower for term in [category]):
-                    bonus_score += sum(1 for term in terms if term in sentence_lower) * 0.5
-
-            total_score = exact_matches * 2 + word_overlap + bonus_score
-            sentence_scores.append((sentence, total_score, i))
-
-        # Sort by score and position (prefer earlier sentences for ties)
+        # Sort by score and select best sentences
         sentence_scores.sort(key=lambda x: (-x[1], x[2]))
 
-        # Select top sentences
-        selected_sentences = []
-        for sentence, score, _ in sentence_scores[:max_sentences]:
-            if score > 0:  # Only include sentences with some relevance
-                selected_sentences.append(sentence)
+        # Select and synthesize top sentences
+        selected_sentences = self._select_and_synthesize_sentences(
+            sentence_scores, max_sentences, query_type
+        )
 
         if selected_sentences:
-            result = '. '.join(selected_sentences)
-            if not result.endswith('.'):
-                result += '.'
+            result = self._format_final_answer(selected_sentences)
             return result
 
         return ""
 
-    def _generate_answer_with_qwen(self, query: str, context: str) -> str:
-        """Generate answer using Qwen2.5 model"""
-        if not self.use_ai_generation:
+    def _split_into_sentences(self, text: str) -> list:
+        """Split text into meaningful sentences"""
+        sentences = []
+
+        # Split on multiple sentence endings
+        import re
+        sentence_endings = re.split(r'[.!?]+', text)
+
+        for sent in sentence_endings:
+            sent = sent.strip()
+            # Filter out very short or meaningless fragments
+            if len(sent) > 15 and len(sent.split()) > 3:
+                sentences.append(sent)
+
+        return sentences
+
+    def _calculate_sentence_relevance_score(self, sentence: str, query_words: set,
+                                            query_type: str, query_lower: str,
+                                            position: int, total_sentences: int) -> float:
+        """Calculate comprehensive relevance score for a sentence"""
+        sentence_lower = sentence.lower()
+        sentence_words = set(sentence_lower.split())
+
+        # Base scoring
+        exact_matches = sum(
+            1 for word in query_words if word in sentence_lower)
+        word_overlap = len(query_words.intersection(sentence_words))
+
+        # Position bonus (earlier sentences often more important)
+        position_bonus = (total_sentences - position) / total_sentences * 0.3
+
+        # Query type specific scoring
+        type_bonus = self._get_query_type_bonus(sentence_lower, query_type)
+
+        # Numerical information bonus (important for specific queries)
+        numerical_bonus = self._get_numerical_bonus(sentence_lower, query_type)
+
+        # Sentence quality score
+        quality_score = self._assess_sentence_quality(sentence)
+
+        # Combine all scores
+        total_score = (
+            exact_matches * 3.0 +           # Exact word matches are very important
+            word_overlap * 2.0 +            # Word overlap is important
+            type_bonus * 2.5 +              # Query type relevance
+            numerical_bonus * 1.5 +         # Numerical information
+            position_bonus +                # Position in text
+            quality_score                   # Overall sentence quality
+        )
+
+        return total_score
+
+    def _get_query_type_bonus(self, sentence: str, query_type: str) -> float:
+        """Get bonus score based on query type specific keywords"""
+        type_keywords = {
+            'eligibility': ['degree', 'bachelor', 'engineering', 'marks', 'cgpa', 'minimum', 'required', 'qualification'],
+            'placement': ['ctc', 'salary', 'companies', 'placed', 'offers', 'average', 'highest', 'package', 'lpa'],
+            'interview': ['interview', 'questions', 'math', 'probability', 'discussion', 'selection', 'process'],
+            'campus': ['campus', 'classes', 'facilities', 'accommodation', 'hostel', 'life', 'sports'],
+            'curriculum': ['courses', 'credits', 'subjects', 'electives', 'semester', 'core', 'stream'],
+            'admission': ['percentile', 'cutoff', 'cat', 'gate', 'application', 'deadline', 'admission'],
+            'fees': ['fee', 'cost', 'tuition', 'expense', 'scholarship', 'financial', 'payment'],
+            'duration': ['year', 'duration', 'time', 'semester', 'period', 'full-time']
+        }
+
+        keywords = type_keywords.get(query_type, [])
+        matches = sum(1 for keyword in keywords if keyword in sentence)
+        return matches * 0.5
+
+    def _get_numerical_bonus(self, sentence: str, query_type: str) -> float:
+        """Bonus for sentences containing numerical information relevant to query type"""
+        import re
+
+        # Look for different types of numbers based on query type
+        if query_type in ['placement', 'fees']:
+            # Look for salary/fee amounts
+            if re.search(r'₹[\d,]+|lpa|\d+\s*lakhs?', sentence):
+                return 1.0
+        elif query_type == 'admission':
+            # Look for percentiles, cutoffs
+            if re.search(r'\d+\.\d+|\d+%|\d+\s*percentile', sentence):
+                return 1.0
+        elif query_type == 'curriculum':
+            # Look for credit numbers
+            if re.search(r'\d+\s*credits?|\d+\s*courses?', sentence):
+                return 1.0
+        elif query_type == 'duration':
+            # Look for time periods
+            if re.search(r'\d+\s*years?|\d+\s*semesters?', sentence):
+                return 1.0
+
+        # General numerical information
+        if re.search(r'\d+', sentence):
+            return 0.3
+
+        return 0.0
+
+    def _assess_sentence_quality(self, sentence: str) -> float:
+        """Assess the overall quality and informativeness of a sentence"""
+        # Length bonus (not too short, not too long)
+        length = len(sentence.split())
+        if 8 <= length <= 25:
+            length_bonus = 0.3
+        elif 5 <= length <= 35:
+            length_bonus = 0.1
+        else:
+            length_bonus = 0.0
+
+        # Completeness bonus (has proper sentence structure)
+        completeness_bonus = 0.2 if sentence.strip().endswith(('.', '!', '?')) else 0.0
+
+        # Information density (avoid very generic sentences)
+        info_words = ['specific', 'include', 'such as',
+                      'for example', 'approximately', 'exactly']
+        info_bonus = 0.1 if any(word in sentence.lower()
+                                for word in info_words) else 0.0
+
+        return length_bonus + completeness_bonus + info_bonus
+
+    def _select_and_synthesize_sentences(self, sentence_scores: list, max_sentences: int, query_type: str) -> list:
+        """Select and potentially synthesize the best sentences"""
+        selected = []
+        used_content = []  # Use list instead of set to store word sets
+
+        for sentence, score, _ in sentence_scores:
+            if len(selected) >= max_sentences:
+                break
+
+            if score <= 0:
+                continue
+
+            # Avoid very similar sentences
+            sentence_words = set(sentence.lower().split())
+            if not any(len(sentence_words.intersection(used)) > len(sentence_words) * 0.7
+                       for used in used_content):
+                selected.append(sentence)
+                # Append to list instead of add to set
+                used_content.append(sentence_words)
+
+        return selected
+
+    def _format_final_answer(self, sentences: list) -> str:
+        """Format the final answer from selected sentences"""
+        if not sentences:
             return ""
 
+        # Join sentences properly
+        result = '. '.join(sent.strip() for sent in sentences)
+
+        # Ensure proper ending
+        if not result.endswith(('.', '!', '?')):
+            result += '.'
+
+        # Clean up any double periods
+        result = result.replace('..', '.')
+
+        return result
+
+    def _generate_answer_with_ai(self, query: str, context: str) -> str:
+        """Generate answer using AI model"""
         try:
-            # Create proper Qwen prompt
+            if not self.use_ai_generation:
+                return ""
+
+            # Create prompt
             prompt = self._create_qwen_prompt(query, context)
 
-            # Check token count
-            if self._count_tokens(prompt) > self.config.max_length - self.config.max_new_tokens:
-                # Truncate context if prompt is too long
-                context = context[:400] + "..."
-                prompt = self._create_qwen_prompt(query, context)
+            # Generate response with better parameters for FLAN-T5
+            logger.debug(f"Generating with prompt length: {len(prompt)}")
+            logger.debug(f"Prompt preview: '{prompt[:100]}...'")
 
-            # Generate with Qwen (professional, focused settings)
-            outputs = self.generator(
+            response = self.generator(
                 prompt,
-                max_new_tokens=min(150, self.config.max_new_tokens),
-                temperature=0.2,  # Lower for more focused, professional responses
-                top_p=0.75,  # More focused word choice
+                max_new_tokens=80,  # Good length for FLAN-T5 factual responses
+                temperature=0.3,  # Lower temperature for more factual responses
+                top_p=0.9,
                 do_sample=True,
-                repetition_penalty=1.05,  # Slightly higher to avoid repetition
                 pad_token_id=self.tokenizer.pad_token_id,
-                eos_token_id=self.tokenizer.eos_token_id
+                eos_token_id=self.tokenizer.eos_token_id,
+                repetition_penalty=1.1,  # Avoid repetition
+                # Note: return_full_text not supported by text2text-generation pipeline
             )
 
-            if outputs and len(outputs) > 0:
-                generated_text = outputs[0].get("generated_text", "")
-                cleaned_answer = self._clean_qwen_output(generated_text)
+            logger.debug(f"Generator returned {len(response)} responses")
 
-                # Validate the output length and quality
-                if (len(cleaned_answer) > 10 and
-                    cleaned_answer.count(' ') > 3 and
-                        self._validate_answer_grounding(cleaned_answer, context)):
-                    return cleaned_answer
+            # Extract and clean the generated text
+            if response and len(response) > 0:
+                generated_text = response[0]['generated_text']
+                logger.debug(f"Raw AI response length: {len(generated_text)}")
+                logger.debug(
+                    f"Raw AI response content: '{generated_text[:200]}...'")
+
+                # More intelligent prompt removal - be conservative
+                original_length = len(generated_text)
+
+                # Try different approaches to remove prompt without losing content
+                if prompt in generated_text:
+                    # Method 1: Direct prompt removal
+                    generated_text = generated_text[len(prompt):]
+                    logger.debug(
+                        f"Removed exact prompt match, length: {len(generated_text)}")
+                elif generated_text.startswith(prompt[:50]):  # Partial match
+                    # Method 2: Find where the actual response starts
+                    # Look for common response indicators
+                    response_indicators = [
+                        "ANSWER:", "Answer:", "answer:", "\n", ":", "A:"]
+                    for indicator in response_indicators:
+                        if indicator in generated_text:
+                            idx = generated_text.find(indicator)
+                            if idx > 0:
+                                generated_text = generated_text[idx +
+                                                                len(indicator):].strip()
+                                logger.debug(
+                                    f"Found response after '{indicator}', length: {len(generated_text)}")
+                                break
+                else:
+                    logger.debug(
+                        "No prompt removal needed - keeping full response")
+
+                logger.debug(
+                    f"After prompt processing: {len(generated_text)} chars (was {original_length})")
+
+                logger.debug(
+                    f"Text after prompt removal: '{generated_text[:200]}...'")
+
+                cleaned_text = self._clean_qwen_output(generated_text)
+                logger.debug(f"Cleaned text length: {len(cleaned_text)}")
+                logger.debug(f"Cleaned text content: '{cleaned_text}'")
+
+                # Safety check: if cleaning removed everything, use the raw generated text
+                if not cleaned_text or len(cleaned_text.strip()) == 0:
+                    if generated_text and len(generated_text.strip()) > 0:
+                        logger.warning(
+                            "Cleaning removed all content, using raw generated text")
+                        cleaned_text = generated_text.strip()
+                        # Add basic punctuation if needed
+                        if cleaned_text and not cleaned_text.endswith(('.', '!', '?')):
+                            cleaned_text += '.'
+                    else:
+                        logger.warning(
+                            "AI generated empty response after cleaning")
+                        logger.debug(
+                            f"Original response was: '{response[0]['generated_text']}'")
+                        logger.debug(f"Prompt was: '{prompt}'")
+                        return ""
+
+                # Validate the answer with detailed logging
+                is_valid, validation_details = self._validate_answer_grounding_with_details(
+                    cleaned_text, context)
+                if is_valid:
+                    logger.info(
+                        f"AI answer passed validation: {validation_details}")
+                    return cleaned_text
+                else:
+                    logger.warning(
+                        f"Generated answer failed validation: {validation_details}. Falling back to context extraction")
+                    return ""
+            else:
+                logger.warning("No response generated from AI model")
+                return ""
 
         except Exception as e:
-            logger.warning(f"Qwen generation failed: {e}")
-
-        return ""
+            logger.error(f"Error generating AI answer: {e}")
+            return ""
 
     def _extract_direct_answer(self, query: str, search_results: List) -> str:
-        """Extract focused answer from search results with AI generation fallback"""
+        """Enhanced answer extraction with intelligent context fusion and ranking"""
         if not search_results:
             return "I couldn't find relevant information to answer your question."
 
-        # Get the best contexts
-        contexts = []
-        for result in search_results[:3]:  # Top 3 results
-            full_answer = result.content.get('answer', '')
-            if full_answer:
-                contexts.append(full_answer)
+        # Analyze query to determine best extraction strategy
+        query_intent = self._analyze_query_intent(query.lower())
 
-        combined_context = " ".join(contexts)
+        # Rank and filter search results for better context selection
+        ranked_results = self._rank_search_results_for_query(
+            search_results, query, query_intent)
 
-        # Try AI generation first if available
-        if self.use_ai_generation and combined_context:
-            ai_answer = self._generate_answer_with_qwen(
-                query, combined_context)
+        if not ranked_results:
+            return "I found some information but it doesn't seem relevant to your specific question."
+
+        # Get intelligently selected contexts
+        selected_contexts = self._select_best_contexts(
+            ranked_results, query_intent)
+
+        # Try AI generation first if available and appropriate
+        if self.use_ai_generation and selected_contexts:
+            combined_context = self._fuse_contexts_intelligently(
+                selected_contexts, query_intent)
+            ai_answer = self._generate_answer_with_ai(query, combined_context)
             if ai_answer:
                 return ai_answer
 
-        # Fallback to sentence extraction
-        best_result = search_results[0]
-        full_answer = best_result.content.get('answer', '')
+        # Enhanced fallback to sentence extraction with context fusion
+        return self._extract_answer_from_contexts(query, selected_contexts, query_intent)
 
-        if not full_answer:
+    def _rank_search_results_for_query(self, search_results: List, query: str, query_intent: dict) -> List:
+        """Rank search results based on query-specific relevance"""
+        ranked_results = []
+
+        for result in search_results:
+            # Calculate query-specific relevance score
+            relevance_score = self._calculate_query_specific_relevance(
+                result, query, query_intent)
+
+            # Only include results above minimum threshold
+            if relevance_score > 0.1:
+                ranked_results.append((result, relevance_score))
+
+        # Sort by relevance score
+        ranked_results.sort(key=lambda x: x[1], reverse=True)
+
+        return [result for result, score in ranked_results]
+
+    def _calculate_query_specific_relevance(self, result, query: str, query_intent: dict) -> float:
+        """Calculate how relevant a search result is to the specific query"""
+        content = result.content
+        answer_text = content.get('answer', '').lower()
+        question_text = content.get('question', '').lower()
+
+        # Base confidence from search
+        base_score = result.confidence
+
+        # Query word overlap bonus
+        query_words = set(query.lower().split())
+        answer_words = set(answer_text.split())
+        question_words = set(question_text.split())
+
+        answer_overlap = len(query_words.intersection(
+            answer_words)) / len(query_words) if query_words else 0
+        question_overlap = len(query_words.intersection(
+            question_words)) / len(query_words) if query_words else 0
+
+        # Query type specific bonus
+        type_bonus = self._get_content_type_relevance(
+            answer_text, query_intent['type'])
+
+        # Information type bonus (factual vs procedural)
+        info_type_bonus = self._get_information_type_relevance(
+            answer_text, query_intent['information_type'])
+
+        # Combine scores
+        total_score = (
+            base_score * 0.4 +
+            answer_overlap * 0.3 +
+            question_overlap * 0.1 +
+            type_bonus * 0.15 +
+            info_type_bonus * 0.05
+        )
+
+        return total_score
+
+    def _get_content_type_relevance(self, content: str, query_type: str) -> float:
+        """Get relevance bonus based on content matching query type"""
+        type_indicators = {
+            'eligibility': ['degree', 'bachelor', 'marks', 'cgpa', 'minimum', 'required'],
+            'admission': ['application', 'deadline', 'cutoff', 'percentile', 'cat', 'gate'],
+            'placement': ['salary', 'ctc', 'companies', 'average', 'highest', 'placed'],
+            'curriculum': ['courses', 'credits', 'semester', 'subjects', 'core', 'electives'],
+            'fees': ['fee', 'cost', 'tuition', 'payment', 'scholarship'],
+            'campus': ['campus', 'hostel', 'facilities', 'accommodation', 'life'],
+            'interview': ['interview', 'selection', 'process', 'questions', 'discussion']
+        }
+
+        indicators = type_indicators.get(query_type, [])
+        matches = sum(1 for indicator in indicators if indicator in content)
+
+        return min(1.0, matches * 0.2)
+
+    def _get_information_type_relevance(self, content: str, info_type: str) -> float:
+        """Get relevance bonus based on information type match"""
+        if info_type == 'factual':
+            # Look for specific facts, numbers, names
+            import re
+            if re.search(r'\d+|₹|%|specific|exactly|precisely', content):
+                return 0.3
+        elif info_type == 'procedural':
+            # Look for process words
+            if any(word in content for word in ['how', 'process', 'steps', 'procedure', 'apply', 'submit']):
+                return 0.3
+        elif info_type == 'comparative':
+            # Look for comparison words
+            if any(word in content for word in ['compare', 'versus', 'difference', 'better', 'higher', 'lower']):
+                return 0.3
+
+        return 0.0
+
+    def _select_best_contexts(self, ranked_results: List, query_intent: dict) -> List[str]:
+        """Select the best contexts based on query intent and diversity"""
+        contexts = []
+        max_contexts = 3 if query_intent['specificity'] == 'specific' else 4
+
+        for i, result in enumerate(ranked_results[:max_contexts]):
+            answer_text = result.content.get('answer', '')
+            if answer_text and len(answer_text.strip()) > 20:
+                contexts.append(answer_text)
+
+        return contexts
+
+    def _fuse_contexts_intelligently(self, contexts: List[str], query_intent: dict) -> str:
+        """Intelligently fuse multiple contexts for better AI generation"""
+        if not contexts:
+            return ""
+
+        if len(contexts) == 1:
+            return contexts[0]
+
+        # For specific queries, prioritize the most relevant context
+        if query_intent['specificity'] == 'specific':
+            # Take the best context and supplement with key info from others
+            primary_context = contexts[0]
+            supplementary_info = []
+
+            for context in contexts[1:]:
+                # Extract key numerical or specific information
+                import re
+                numbers = re.findall(
+                    r'\d+(?:\.\d+)?(?:%|₹|lpa|lakhs?|years?|credits?)', context)
+                if numbers:
+                    supplementary_info.extend(numbers)
+
+            if supplementary_info:
+                return f"{primary_context} Additional details: {', '.join(set(supplementary_info))}"
+            else:
+                return primary_context
+        else:
+            # For general queries, combine contexts more comprehensively
+            return " ".join(contexts)
+
+    def _extract_answer_from_contexts(self, query: str, contexts: List[str], query_intent: dict) -> str:
+        """Extract answer from contexts when AI generation is not available"""
+        if not contexts:
             return "I found some information but couldn't extract a specific answer."
 
-        # Extract relevant section
+        # Use the enhanced sentence extraction on the best context
+        primary_context = contexts[0]
+
+        # Adjust extraction parameters based on query intent
+        if query_intent['specificity'] == 'specific':
+            max_sentences = 2
+        elif query_intent['specificity'] == 'broad':
+            max_sentences = 4
+        else:
+            max_sentences = 3
+
         relevant_section = self._extract_relevant_sentences(
-            query, full_answer, max_sentences=3)
+            query, primary_context, max_sentences=max_sentences)
 
         if relevant_section:
             return relevant_section
         else:
-            # Final fallback: return first few sentences
-            sentences = full_answer.split('.')[:3]
-            return '. '.join(sent.strip() for sent in sentences if sent.strip()) + '.'
+            # Final fallback with better sentence selection
+            sentences = primary_context.split('.')
+            # Select sentences that contain query-relevant terms
+            query_words = set(query.lower().split())
+            relevant_sentences = []
+
+            for sentence in sentences[:5]:  # Check first 5 sentences
+                sentence = sentence.strip()
+                if len(sentence) > 15:
+                    sentence_words = set(sentence.lower().split())
+                    if query_words.intersection(sentence_words):
+                        relevant_sentences.append(sentence)
+                        if len(relevant_sentences) >= 2:
+                            break
+
+            if relevant_sentences:
+                return '. '.join(relevant_sentences) + '.'
+            else:
+                # Last resort: return first meaningful sentence
+                for sentence in sentences:
+                    sentence = sentence.strip()
+                    if len(sentence) > 20:
+                        return sentence + '.'
+
+                return "I found some information but couldn't extract a specific answer."
 
     def process_query(self, query: str, context_agent: ContextAgent, top_k: int = 5) -> Dict[str, Any]:
         """Process query with Qwen2.5 generation and focused section extraction"""
@@ -999,7 +1813,8 @@ def create_config_from_args(args) -> QAConfig:
         max_new_tokens=getattr(args, 'max_new_tokens', 256),
         temperature=getattr(args, 'temperature', 0.7),
         context_window=getattr(args, 'context_window', 800),
-        min_confidence=getattr(args, 'min_confidence', 0.1)
+        min_confidence=getattr(args, 'min_confidence', 0.1),
+        use_ai_generation=not getattr(args, 'no_ai_generation', False)
     )
 
 # ---------------------------
@@ -1043,6 +1858,8 @@ Examples:
                         default=800, help='Maximum context tokens')
     parser.add_argument('--min_confidence', type=float,
                         default=0.1, help='Minimum confidence threshold')
+    parser.add_argument('--no_ai_generation', action='store_true',
+                        help='Disable AI model loading and use only context extraction')
 
     # Output options
     parser.add_argument('--max_print', type=int, default=1,

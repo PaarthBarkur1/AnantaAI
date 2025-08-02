@@ -24,16 +24,62 @@ function App() {
       setConversationHistory(prev => [...prev, { query: text, answer: mockAnswer }])
     } else {
       // Use backend for custom queries
+      console.log('Setting currentQueryRef to:', text)
       currentQueryRef.current = text
+      // Add user question to history immediately with a placeholder answer
+      setConversationHistory(prev => [...prev, { 
+        query: text, 
+        answer: { 
+          answer: '', 
+          confidence: 0, 
+          sources: [], 
+          processing_time: 0 
+        } 
+      }])
       await sendQuery(text)
     }
   }
 
-  // Add backend responses to history when they arrive
+  // Update the last conversation item with the backend response when it arrives
   useEffect(() => {
+    console.log('Answer effect triggered:', { answer, currentQueryRef: currentQueryRef.current })
     if (answer && currentQueryRef.current) {
-      setConversationHistory(prev => [...prev, { query: currentQueryRef.current, answer }])
-      currentQueryRef.current = '' // Clear after adding
+      console.log('Updating conversation with answer:', answer)
+      setConversationHistory(prev => {
+        const newHistory = [...prev]
+        // Find and update the last item that has an empty answer (our placeholder)
+        const lastIndex = newHistory.length - 1
+        console.log('Checking last item:', { 
+          lastIndex, 
+          lastItem: newHistory[lastIndex], 
+          currentQuery: currentQueryRef.current,
+          lastItemQuery: newHistory[lastIndex]?.query,
+          lastItemAnswer: newHistory[lastIndex]?.answer?.answer 
+        })
+        
+        // More flexible matching - just find the last item with empty answer
+        if (lastIndex >= 0 && newHistory[lastIndex].answer.answer === '') {
+          console.log('Updating item at index:', lastIndex, 'with answer:', answer)
+          newHistory[lastIndex] = { 
+            query: newHistory[lastIndex].query, // Keep the original query
+            answer: {
+              answer: answer.answer,
+              confidence: answer.confidence,
+              sources: answer.sources || [],
+              processing_time: answer.processing_time
+            }
+          }
+          console.log('Updated item:', newHistory[lastIndex])
+        } else {
+          console.log('No matching item found to update')
+        }
+        return newHistory
+      })
+      // Don't clear currentQueryRef until after the state update
+      setTimeout(() => {
+        console.log('Clearing currentQueryRef')
+        currentQueryRef.current = ''
+      }, 100)
     }
   }, [answer])
 
@@ -70,33 +116,27 @@ function App() {
         {/* Conversation history */}
         {conversationHistory.length > 0 && (
           <div className="space-y-8 mb-8">
-            {conversationHistory.map((item, index) => (
-              <div key={index} className="space-y-4">
-                {/* User query */}
-                <div className="flex justify-end">
-                  <div className="max-w-3xl bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl rounded-tr-md px-6 py-4 shadow-lg">
-                    <p className="text-sm font-medium mb-1">You</p>
-                    <p>{item.query}</p>
+            {conversationHistory.map((item, index) => {
+              return (
+                <div key={`${index}-${item.query}-${item.answer.answer?.substring(0, 10)}`} className="space-y-4">
+                  {/* User query */}
+                  <div className="flex justify-end">
+                    <div className="max-w-3xl bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl rounded-tr-md px-6 py-4 shadow-lg">
+                      <p className="text-sm font-medium mb-1">You</p>
+                      <p>{item.query}</p>
+                    </div>
                   </div>
+                  {/* AI response - only show if there's an actual answer */}
+                  {item.answer.answer && <Answer answer={item.answer} query={item.query} />}
+                  {/* Show typing indicator if this is the last item and it has an empty answer */}
+                  {index === conversationHistory.length - 1 && item.answer.answer === '' && loading && (
+                    <TypingIndicator />
+                  )}
                 </div>
-                {/* AI response */}
-                <Answer answer={item.answer} query={item.query} />
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
-
-        {/* Current loading state */}
-        {loading && currentQueryRef.current && (
-          <div className="flex justify-end mb-4">
-            <div className="max-w-3xl bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl rounded-tr-md px-6 py-4 shadow-lg">
-              <p className="text-sm font-medium mb-1">You</p>
-              <p>{currentQueryRef.current}</p>
-            </div>
-          </div>
-        )}
-
-        {loading && <TypingIndicator />}
 
         {/* Error state */}
         {error && (
@@ -104,11 +144,6 @@ function App() {
             error={error}
             onRetry={() => currentQueryRef.current && sendQuery(currentQueryRef.current)}
           />
-        )}
-
-        {/* Current answer (if not in history yet) */}
-        {answer && currentQueryRef.current && !conversationHistory.some(item => item.query === currentQueryRef.current && item.answer === answer) && (
-          <Answer answer={answer} query={currentQueryRef.current} />
         )}
 
         {/* Chat input - always at bottom */}
