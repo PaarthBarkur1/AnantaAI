@@ -69,60 +69,29 @@ echo    Giving backend a moment to start...
 timeout /t 5 /nobreak > nul
 
 REM --- Step 2: Navigate to Frontend Directory ---
-echo.
 echo 📱 Preparing frontend...
 if not exist "frontend" (
-    echo ❌ 'frontend' directory not found. Please ensure project structure is correct.
+    echo ERROR: 'frontend' directory not found. Please ensure project structure is correct.
     pause
     exit /b 1
 )
 cd frontend
 echo    Changed directory to frontend: %cd%
 
-REM --- Step 3: Check Node.js and npm versions ---
-echo 🔍 Checking Node.js and npm versions...
-node --version
-npm --version
-
-REM --- Step 4: Install npm Dependencies (if not already installed) ---
-echo.
+REM --- Step 3: Install npm Dependencies (if not already installed) ---
 echo 📥 Installing npm dependencies (if needed)...
-if not exist "node_modules" (
-    echo    node_modules not found, running npm install...
-    call npm install
-    if errorlevel 1 (
-        echo ❌ npm install failed. Please check your Node.js and npm setup.
-        pause
-        exit /b 1
-    )
-) else (
-    echo    node_modules exists, checking for updates...
-    call npm ci --silent
-    if errorlevel 1 (
-        echo ⚠️ npm ci failed, falling back to npm install...
-        call npm install
-        if errorlevel 1 (
-            echo ❌ npm install failed. Please check your Node.js and npm setup.
-            pause
-            exit /b 1
-        )
-    )
+call npm install
+if errorlevel 1 (
+    echo ERROR: npm install failed. Please check your Node.js and npm setup.
+    pause
+    exit /b 1
 )
 
-REM --- Step 5: Verify Tailwind CSS packages ---
-echo.
-echo 🎨 Verifying Tailwind CSS packages...
-npm list @tailwindcss/forms @tailwindcss/typography @tailwindcss/aspect-ratio > nul 2>&1
+REM --- Step 4: Install Additional Tailwind Packages (if not already installed) ---
+echo 🎨 Installing Tailwind CSS packages (if needed)...
+call npm install @tailwindcss/forms @tailwindcss/typography @tailwindcss/aspect-ratio --save-dev
 if errorlevel 1 (
-    echo    Installing missing Tailwind CSS packages...
-    call npm install @tailwindcss/forms @tailwindcss/typography @tailwindcss/aspect-ratio --save-dev
-    if errorlevel 1 (
-        echo ⚠️ Tailwind package installation failed. Frontend might not display correctly.
-    ) else (
-        echo ✅ Tailwind CSS packages installed successfully
-    )
-) else (
-    echo ✅ Tailwind CSS packages verified
+    echo WARNING: Tailwind package installation failed. Frontend might not display correctly.
 )
 
 REM --- Step 5: Start Frontend Development Server (in current window) ---

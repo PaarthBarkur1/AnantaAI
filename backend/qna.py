@@ -204,108 +204,159 @@ class WebContentSource(ContentSource):
 
         for attempt in range(self.max_retries):
             try:
-                logger.info(
-                    f"Scraping content from {self.url} (attempt {attempt + 1})")
+                logger.info(f"Scraping content from {self.url} (attempt {attempt + 1})")
                 content = []
 
-                # Get paragraphs with main content
-                paragraphs = self.scraper.scrape_paragraphs(self.url)
-                for i, para in enumerate(paragraphs):
-                    if para.strip() and len(para.strip()) > 50:  # Filter meaningful paragraphs
+                # --- ENHANCEMENT: Use custom scrapers first based on URL keywords ---
+                if "landing_page" in self.url:
+                    data = self.scraper.scrape_landing_page_content(self.url)
+                    # Convert structured data from the custom scraper into the content format
+                    if data:
                         content.append({
-                            "question": f"Main Content Section {i + 1}",
-                            "answer": para.strip(),
-                            "metadata": {
-                                "source": self.get_source_type(),
-                                "url": self.url,
-                                "type": "paragraph",
-                                "section_id": i + 1
-                            }
+                            "question": "Landing Page Hero Section",
+                            "answer": f"{data.get('hero_title', '')}\n{data.get('hero_subtitle', '')}",
+                            "metadata": {"source": self.get_source_type(), "url": self.url, "type": "hero_section"}
                         })
-
-                # Get headlines for structure
-                headlines = self.scraper.scrape_headlines(self.url)
-                for i, headline in enumerate(headlines):
-                    content.append({
-                        "question": f"Section Heading {i + 1}",
-                        "answer": headline["text"],
-                        "metadata": {
-                            "source": self.get_source_type(),
-                            "url": self.url,
-                            "type": "headline",
-                            "level": headline["level"]
-                        }
-                    })
-
-                # Try to get structured table data
-                tables = self.scraper.scrape_table_data(self.url)
-                for i, table in enumerate(tables):
-                    if table:  # Only process non-empty tables
-                        table_content = "\n".join(
-                            [" | ".join(row) for row in table])
-                        content.append({
-                            "question": f"Table Content {i + 1}",
-                            "answer": table_content,
-                            "metadata": {
-                                "source": self.get_source_type(),
-                                "url": self.url,
-                                "type": "table",
-                                "table_id": i + 1
-                            }
-                        })
-
-                # Get WordPress recent posts if available
-                try:
-                    recent_posts = self.scraper.scrape_wordpress_recent_posts(
-                        self.url)
-                    for i, post in enumerate(recent_posts):
-                        content.append({
-                            "question": f"Recent Post {i + 1}",
-                            "answer": f"Title: {post['title']}\nLink: {post['link']}",
-                            "metadata": {
-                                "source": self.get_source_type(),
-                                "url": self.url,
-                                "type": "wordpress_post",
-                                "post_id": i + 1
-                            }
-                        })
-                except Exception as wp_error:
-                    logger.debug(
-                        f"Not a WordPress site or no recent posts: {wp_error}")
-
-                # Try specific content areas if no content found yet
-                if not content:
-                    specific_content = self.scraper.scrape_specific_element(
-                        self.url, "div.entry-content, article, .content-area")
-                    for i, text in enumerate(specific_content):
-                        if text.strip() and len(text.strip()) > 50:
+                        if data.get('statistics'):
+                            stats_text = "\n".join([f"{s['value']} - {s['label']}" for s in data['statistics']])
                             content.append({
-                                "question": f"Specific Content Section {i + 1}",
-                                "answer": text.strip(),
+                                "question": "Landing Page Statistics",
+                                "answer": stats_text,
+                                "metadata": {"source": self.get_source_type(), "url": self.url, "type": "statistics"}
+                            })
+                        if data.get('testimonials'):
+                            testimonials_text = "\n\n".join([f"\"{t['quote']}\" - {t['author']}" for t in data['testimonials']])
+                            content.append({
+                                "question": "Customer Testimonials",
+                                "answer": testimonials_text,
+                                "metadata": {"source": self.get_source_type(), "url": self.url, "type": "testimonials"}
+                            })
+
+                elif "recruiter-insights" in self.url:
+                    data = self.scraper.scrape_recruiter_insights_page(self.url)
+                    if data:
+                        content.append({
+                            "question": "Recruiter Insights Page Title",
+                            "answer": data.get('page_title'),
+                            "metadata": {"source": self.get_source_type(), "url": self.url, "type": "page_title"}
+                        })
+                        if data.get('insights'):
+                            insights_text = "\n\n".join([f"Title: {i['title']}\nDescription: {i['description']}" for i in data['insights']])
+                            content.append({
+                                "question": "Recruiter Insights Sections",
+                                "answer": insights_text,
+                                "metadata": {"source": self.get_source_type(), "url": self.url, "type": "insights"}
+                            })
+
+                elif "contact" in self.url:
+                    data = self.scraper.scrape_contact_page_content(self.url)
+                    if data:
+                        content.append({
+                            "question": "Contact Page Information",
+                            "answer": f"Heading: {data.get('heading')}\nForm Fields: {', '.join(data.get('form_fields', []))}",
+                            "metadata": {"source": self.get_source_type(), "url": self.url, "type": "contact_info"}
+                        })
+                        if data.get('contact_info'):
+                            contact_details = "\n".join([f"{k}: {v}" for k, v in data['contact_info'].items()])
+                            content.append({
+                                "question": "Contact Details",
+                                "answer": contact_details,
+                                "metadata": {"source": self.get_source_type(), "url": self.url, "type": "contact_details"}
+                            })
+
+                # --- FALLBACK: If no custom scraper matched, use the generic methods ---
+                if not content:
+                    # Get paragraphs with main content
+                    paragraphs = self.scraper.scrape_paragraphs(self.url)
+                    for i, para in enumerate(paragraphs):
+                        if para.strip() and len(para.strip()) > 50:
+                            content.append({
+                                "question": f"Main Content Section {i + 1}",
+                                "answer": para.strip(),
                                 "metadata": {
                                     "source": self.get_source_type(),
                                     "url": self.url,
-                                    "type": "specific_content",
+                                    "type": "paragraph",
                                     "section_id": i + 1
                                 }
                             })
 
+                    # Get headlines for structure
+                    headlines = self.scraper.scrape_headlines(self.url)
+                    for i, headline in enumerate(headlines):
+                        content.append({
+                            "question": f"Section Heading {i + 1}",
+                            "answer": headline["text"],
+                            "metadata": {
+                                "source": self.get_source_type(),
+                                "url": self.url,
+                                "type": "headline",
+                                "level": headline["level"]
+                            }
+                        })
+
+                    # Try to get structured table data
+                    tables = self.scraper.scrape_table_data(self.url)
+                    for i, table in enumerate(tables):
+                        if table:
+                            table_content = "\n".join([" | ".join(row) for row in table])
+                            content.append({
+                                "question": f"Table Content {i + 1}",
+                                "answer": table_content,
+                                "metadata": {
+                                    "source": self.get_source_type(),
+                                    "url": self.url,
+                                    "type": "table",
+                                    "table_id": i + 1
+                                }
+                            })
+
+                    # Get WordPress recent posts if available
+                    try:
+                        recent_posts = self.scraper.scrape_wordpress_recent_posts(self.url)
+                        for i, post in enumerate(recent_posts):
+                            content.append({
+                                "question": f"Recent Post {i + 1}",
+                                "answer": f"Title: {post['title']}\nLink: {post['link']}",
+                                "metadata": {
+                                    "source": self.get_source_type(),
+                                    "url": self.url,
+                                    "type": "wordpress_post",
+                                    "post_id": i + 1
+                                }
+                            })
+                    except Exception as wp_error:
+                        logger.debug(f"Not a WordPress site or no recent posts: {wp_error}")
+
+                    # Try specific content areas if no content found yet
+                    if not content:
+                        specific_content = self.scraper.scrape_specific_element(self.url, "div.entry-content, article, .content-area")
+                        for i, text in enumerate(specific_content):
+                            if text.strip() and len(text.strip()) > 50:
+                                content.append({
+                                    "question": f"Specific Content Section {i + 1}",
+                                    "answer": text.strip(),
+                                    "metadata": {
+                                        "source": self.get_source_type(),
+                                        "url": self.url,
+                                        "type": "specific_content",
+                                        "section_id": i + 1
+                                    }
+                                })
+
                 if not content:
                     raise ValueError("No content found at URL")
 
-                logger.info(
-                    f"Successfully scraped {len(content)} items from {self.url}")
+                logger.info(f"Successfully scraped {len(content)} items from {self.url}")
                 self._cache = content
                 return content
 
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
                 if attempt == self.max_retries - 1:
-                    raise RuntimeError(
-                        f"Failed to scrape content from {self.url} after {self.max_retries} attempts: {e}")
+                    raise RuntimeError(f"Failed to scrape content from {self.url} after {self.max_retries} attempts: {e}")
                 time.sleep(2 ** attempt)  # Exponential backoff
         return []
-
 # ---------------------------
 # Enhanced Context Agent with Advanced Search
 # ---------------------------

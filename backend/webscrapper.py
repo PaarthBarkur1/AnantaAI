@@ -1,7 +1,6 @@
 import requests
 from requests.exceptions import RequestException, HTTPError, Timeout, ConnectionError
 from bs4 import BeautifulSoup, Tag
-from bs4.element import NavigableString, PageElement
 import logging
 from urllib.parse import urljoin
 from typing import Optional, List, Dict, Union, Any, cast
@@ -79,11 +78,10 @@ class WebScraper:
 
         links = []
         for a_tag in soup.select(selector):
-            if isinstance(a_tag, Tag):  # Type check to ensure we have a Tag
+            if isinstance(a_tag, Tag):
                 href = a_tag.get("href")
                 text = a_tag.get_text(strip=True)
                 if href and text:
-                    # Ensure href is str before using urljoin
                     href_str = str(href)
                     absolute_href = urljoin(url, href_str)
                     links.append({"text": text, "href": absolute_href})
@@ -101,14 +99,14 @@ class WebScraper:
 
         all_tables_data = []
         for table in soup.select(table_selector):
-            if isinstance(table, Tag):  # Type check to ensure we have a Tag
+            if isinstance(table, Tag):
                 table_data = []
                 rows = table.find_all("tr")
                 for row in rows:
-                    if isinstance(row, Tag):  # Type check for row
+                    if isinstance(row, Tag):
                         cols = row.find_all(["td", "th"])
                         row_data = [col.get_text(strip=True) for col in cols if isinstance(col, Tag)]
-                        if row_data: # Only add non-empty rows
+                        if row_data:
                             table_data.append(row_data)
                 if table_data:
                     all_tables_data.append(table_data)
@@ -122,30 +120,27 @@ class WebScraper:
             return []
 
         posts = []
-        # Try to find posts in common WordPress structures
-        # Prioritize more specific article/post containers first
         for entry in soup.select('article.post, div.post, .entry-content a, .post-content a'):
-            if isinstance(entry, Tag):  # Type check for entry
-                a_tag = entry.find('a', href=True)  # Find an 'a' tag with an href within the entry
-                if isinstance(a_tag, Tag):  # Type check for a_tag
+            if isinstance(entry, Tag):
+                a_tag = entry.find('a', href=True)
+                if isinstance(a_tag, Tag):
                     title = a_tag.get_text(strip=True)
                     href = a_tag.get('href')
-                    if href:  # Check if href exists
+                    if href:
                         link = urljoin(url, str(href))
-                        if title and link and {"title": title, "link": link} not in posts:  # Avoid duplicates
+                        if title and link and {"title": title, "link": link} not in posts:
                             posts.append({"title": title, "link": link})
                             if len(posts) >= max_posts:
                                 break
 
-        if len(posts) < max_posts:  # If not enough posts found yet, try other common areas
-            # Fallback: try to find links in widgets or lists, often in sidebars or footers
+        if len(posts) < max_posts:
             for a_tag in soup.select('.widget_recent_entries a, .recent-posts a, #recent-posts-2 li a'):
-                if isinstance(a_tag, Tag):  # Type check for a_tag
+                if isinstance(a_tag, Tag):
                     title = a_tag.get_text(strip=True)
                     href = a_tag.get('href')
-                    if href:  # Check if href exists
+                    if href:
                         link = urljoin(url, str(href))
-                        if title and link and {"title": title, "link": link} not in posts:  # Avoid duplicates
+                        if title and link and {"title": title, "link": link} not in posts:
                             posts.append({"title": title, "link": link})
                             if len(posts) >= max_posts:
                                 break
@@ -165,97 +160,125 @@ class WebScraper:
         texts = [element.get_text(strip=True) for element in elements if element.get_text(strip=True)]
         logging.info(f"Scraped {len(texts)} elements with selector '{css_selector}' from {url}")
         return texts
+    
+    # --- ENHANCED METHODS BASED ON YOUR FILES ---
 
-# # Example Usage with your provided URLs
-# if __name__ == "__main__":
-# scraper = WebScraper()
+    def scrape_landing_page_content(self, url: str) -> Dict[str, Any]:
+        """Scrapes specific content from the landing_page.html structure."""
+        soup = self.scrape_html(url)
+        if not soup:
+            return {}
+        
+        data = {}
+        
+        # Hero section: Title and Subtitle
+        hero_section = soup.find('section', class_='hero-section')
+        if hero_section:
+            data['hero_title'] = hero_section.find('h1').get_text(strip=True) if hero_section.find('h1') else None
+            data['hero_subtitle'] = hero_section.find('p', class_='text-xl').get_text(strip=True) if hero_section.find('p', class_='text-xl') else None
+        
+        # Key statistics
+        stats_section = soup.find('section', id='stats')
+        if stats_section:
+            data['statistics'] = []
+            for stat in stats_section.find_all('div', class_='text-center'):
+                value = stat.find('div', class_='text-4xl').get_text(strip=True) if stat.find('div', class_='text-4xl') else None
+                label = stat.find('p').get_text(strip=True) if stat.find('p') else None
+                if value and label:
+                    data['statistics'].append({'value': value, 'label': label})
+                    
+        # Testimonials
+        testimonials_section = soup.find('section', id='testimonials')
+        if testimonials_section:
+            data['testimonials'] = []
+            for testimonial in testimonials_section.find_all('div', class_='bg-white/5'):
+                quote = testimonial.find('p', class_='italic').get_text(strip=True) if testimonial.find('p', class_='italic') else None
+                author = testimonial.find('p', class_='font-bold').get_text(strip=True) if testimonial.find('p', class_='font-bold') else None
+                if quote and author:
+                    data['testimonials'].append({'quote': quote, 'author': author})
+        
+        logging.info(f"Scraped custom landing page content from {url}")
+        return data
 
-# # Define the URLs from your list
-# iisc_urls = [
-#     {"name": "IISc M.Mgt Program Overview", "url": "https://mgmt.iisc.ac.in/programmes/master-of-management/", "category": ["program", "overview", "curriculum", "structure", "courses"]},
-#     {"name": "IISc Admissions", "url": "https://admissions.iisc.ac.in/", "category": ["admission", "eligibility", "application", "cutoff", "percentile", "cat", "gate"]},
-#     {"name": "IISc Placements", "url": "https://mgmt.iisc.ac.in/placements/", "category": ["placement", "salary", "ctc", "companies", "offers"]},
-#     {"name": "IISc Faculty & Research", "url": "https://mgmt.iisc.ac.in/faculty/", "category": ["faculty", "research", "projects", "phd", "supervisor", "ongoing"]},
-#     {"name": "IISc Student Life", "url": "https://mgmt.iisc.ac.in/student-life/", "category": ["student life", "campus", "hostel", "accommodation", "facilities"]},
-#     {"name": "IISc M.Mgt Main Page", "url": "https://mgmt.iisc.ac.in/mmgt/", "category": ["program", "overview", "m.mgt", "main", "home"]},
-#     {"name": "IISc Campus Life", "url": "https://mgmt.iisc.ac.in/campus-life/", "category": ["campus", "student life", "facilities", "environment"]},
-#     {"name": "IISc Location", "url": "https://mgmt.iisc.ac.in/locate-us/", "category": ["location", "address", "map", "directions"]},
-#     {"name": "IISc About Us", "url": "https://mgmt.iisc.ac.in/about-us/", "category": ["about", "institute", "history", "mission"]},
-#     {"name": "IISc Faculty Directory", "url": "https://mgmt.iisc.ac.in/faculty-2/", "category": ["faculty", "directory", "professors", "staff"]},
-#     {"name": "IISc Management News & Updates", "url": "https://mgmt.iisc.ac.in/newwordpress/", "category": ["news", "updates", "announcements", "recent posts", "events", "blog"]}
-# ]
+    def scrape_recruiter_insights_page(self, url: str) -> Dict[str, Any]:
+        """Scrapes specific content from the recruiter-insights.html structure."""
+        soup = self.scrape_html(url)
+        if not soup:
+            return {}
+        
+        data = {}
+        
+        data['page_title'] = soup.find('h1').get_text(strip=True) if soup.find('h1') else None
+        
+        insights_container = soup.find('div', class_='space-y-12')
+        if insights_container:
+            data['insights'] = []
+            for insight in insights_container.find_all('div', class_='p-6'):
+                title = insight.find('h3').get_text(strip=True) if insight.find('h3') else None
+                description = insight.find('p').get_text(strip=True) if insight.find('p') else None
+                if title and description:
+                    data['insights'].append({'title': title, 'description': description})
+        
+        logging.info(f"Scraped custom recruiter insights page content from {url}")
+        return data
 
-# print("\n--- Scraping Paragraphs ---")
-# for item in iisc_urls:
-#     if "program" in item["category"] or "about" in item["category"] or "student life" in item["category"]:
-#         print(f"\nScraping paragraphs from: {item['url']}")
-#         paragraphs = scraper.scrape_paragraphs(item['url'])
-#         # for p in paragraphs[:3]: # Print first 3 paragraphs for brevity
-#         #     print(p)
-#         # if paragraphs:
-#         #     print(f"...and {len(paragraphs) - 3} more paragraphs.")
-#         # else:
-#         #     print("No paragraphs found.")
+    def scrape_contact_page_content(self, url: str) -> Dict[str, Any]:
+        """Scrapes specific content from the contact.html structure."""
+        soup = self.scrape_html(url)
+        if not soup:
+            return {}
+            
+        data = {}
+        
+        data['heading'] = soup.find('h1').get_text(strip=True) if soup.find('h1') else None
+        
+        form = soup.find('form')
+        if form:
+            data['form_fields'] = []
+            for input_field in form.find_all(['input', 'textarea']):
+                field_name = input_field.get('name') or input_field.get('id') or input_field.get('placeholder')
+                if field_name:
+                    data['form_fields'].append(field_name)
+        
+        contact_info_div = soup.find('div', class_='mt-8')
+        if contact_info_div:
+            data['contact_info'] = {}
+            info_items = contact_info_div.find_all('p', class_='flex')
+            for item in info_items:
+                icon_name = item.find('svg').get('aria-label') if item.find('svg') else 'info'
+                text = item.get_text(strip=True)
+                data['contact_info'][icon_name] = text
+        
+        logging.info(f"Scraped custom contact page content from {url}")
+        return data
 
+# Example Usage
+if __name__ == "__main__":
+    scraper = WebScraper()
+    
+    # Hypothetical URLs based on your file structure
+    base_url = "https://example-doms-placement.com" 
+    
+    # --- Using the enhanced custom methods ---
+    print("\n--- Scraping Custom Landing Page Content ---")
+    landing_data = scraper.scrape_landing_page_content(f"{base_url}/pages/landing_page.html")
+    print(f"Landing Page Data: {landing_data}")
+    
+    print("\n--- Scraping Custom Recruiter Insights Page Content ---")
+    recruiter_data = scraper.scrape_recruiter_insights_page(f"{base_url}/pages/recruiter-insights.html")
+    print(f"Recruiter Insights Data: {recruiter_data}")
+    
+    print("\n--- Scraping Custom Contact Page Content ---")
+    contact_data = scraper.scrape_contact_page_content(f"{base_url}/pages/contact.html")
+    print(f"Contact Page Data: {contact_data}")
 
-# print("\n--- Scraping Headlines ---")
-# for item in iisc_urls:
-#     if "program" in item["category"] or "faculty" in item["category"]:
-#         print(f"\nScraping headlines from: {item['url']}")
-#         headlines = scraper.scrape_headlines(item['url'])
-#         # for h in headlines[:3]: # Print first 3 headlines for brevity
-#         #     print(h)
-#         # if headlines:
-#         #     print(f"...and {len(headlines) - 3} more headlines.")
-#         # else:
-#         #     print("No headlines found.")
-
-# print("\n--- Scraping Links (e.g., Admissions page) ---")
-# admissions_url = next((item['url'] for item in iisc_urls if item['name'] == "IISc Admissions"), None)
-# if admissions_url:
-#     print(f"\nScraping links from: {admissions_url}")
-#     links = scraper.scrape_links(admissions_url)
-#     # for link in links[:5]:
-#     #     print(link)
-#     # if links:
-#     #     print(f"...and {len(links) - 5} more links.")
-#     # else:
-#     #     print("No links found.")
-
-# print("\n--- Scraping WordPress Recent Posts ---")
-# news_url = next((item['url'] for item in iisc_urls if "news" in item["category"]), None)
-# if news_url:
-#     print(f"\nScraping recent posts from: {news_url}")
-#     recent_posts = scraper.scrape_wordpress_recent_posts(news_url, max_posts=3)
-#     # for post in recent_posts:
-#     #     print(f"Title: {post['title']}, Link: {post['link']}")
-#     # if not recent_posts:
-#     #     print("No recent posts found.")
-
-# print("\n--- Scraping Table Data (e.g., Placements page - might need specific selectors) ---")
-# placements_url = next((item['url'] for item in iisc_urls if item['name'] == "IISc Placements"), None)
-# if placements_url:
-#     print(f"\nScraping tables from: {placements_url}")
-#     tables_data = scraper.scrape_table_data(placements_url)
-#     # if tables_data:
-#     #     for i, table in enumerate(tables_data):
-#     #         print(f"Table {i+1} (first 3 rows):")
-#     #         for row in table[:3]:
-#     #             print(row)
-#     #         if len(table) > 3:
-#     #             print(f"...and {len(table) - 3} more rows.")
-#     # else:
-#     #     print("No tables found.")
-
-# print("\n--- Scraping Specific Element (e.g., a specific div or class) ---")
-# # This is an example, you would need to inspect the actual webpage to find a useful selector
-# program_overview_url = next((item['url'] for item in iisc_urls if item['name'] == "IISc M.Mgt Program Overview"), None)
-# if program_overview_url:
-#     print(f"\nScraping specific elements from: {program_overview_url} (e.g., elements with class 'content-area')")
-#     # You'll need to inspect the page's HTML to find relevant classes/IDs
-#     # For demonstration, let's assume there's a div with class 'main-content'
-#     specific_content = scraper.scrape_specific_element(program_overview_url, "div.entry-content")
-#     # for text in specific_content[:2]:
-#     #     print(text)
-#     # if not specific_content:
-#     #     print("No elements found with the given selector.")
+    # --- Using the generic methods on the index page ---
+    print("\n--- Scraping Generic Content from Index Page ---")
+    index_url = f"{base_url}/index.html"
+    print(f"Scraping headlines from: {index_url}")
+    headlines = scraper.scrape_headlines(index_url)
+    print(f"Headlines: {headlines}")
+    
+    print(f"\nScraping links from: {index_url}")
+    links = scraper.scrape_links(index_url)
+    print(f"Links: {links}")
