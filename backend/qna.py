@@ -204,7 +204,8 @@ class WebContentSource(ContentSource):
 
         for attempt in range(self.max_retries):
             try:
-                logger.info(f"Scraping content from {self.url} (attempt {attempt + 1})")
+                logger.info(
+                    f"Scraping content from {self.url} (attempt {attempt + 1})")
                 content = []
 
                 # --- ENHANCEMENT: Use custom scrapers first based on URL keywords ---
@@ -218,14 +219,16 @@ class WebContentSource(ContentSource):
                             "metadata": {"source": self.get_source_type(), "url": self.url, "type": "hero_section"}
                         })
                         if data.get('statistics'):
-                            stats_text = "\n".join([f"{s['value']} - {s['label']}" for s in data['statistics']])
+                            stats_text = "\n".join(
+                                [f"{s['value']} - {s['label']}" for s in data['statistics']])
                             content.append({
                                 "question": "Landing Page Statistics",
                                 "answer": stats_text,
                                 "metadata": {"source": self.get_source_type(), "url": self.url, "type": "statistics"}
                             })
                         if data.get('testimonials'):
-                            testimonials_text = "\n\n".join([f"\"{t['quote']}\" - {t['author']}" for t in data['testimonials']])
+                            testimonials_text = "\n\n".join(
+                                [f"\"{t['quote']}\" - {t['author']}" for t in data['testimonials']])
                             content.append({
                                 "question": "Customer Testimonials",
                                 "answer": testimonials_text,
@@ -233,7 +236,8 @@ class WebContentSource(ContentSource):
                             })
 
                 elif "recruiter-insights" in self.url:
-                    data = self.scraper.scrape_recruiter_insights_page(self.url)
+                    data = self.scraper.scrape_recruiter_insights_page(
+                        self.url)
                     if data:
                         content.append({
                             "question": "Recruiter Insights Page Title",
@@ -241,7 +245,8 @@ class WebContentSource(ContentSource):
                             "metadata": {"source": self.get_source_type(), "url": self.url, "type": "page_title"}
                         })
                         if data.get('insights'):
-                            insights_text = "\n\n".join([f"Title: {i['title']}\nDescription: {i['description']}" for i in data['insights']])
+                            insights_text = "\n\n".join(
+                                [f"Title: {i['title']}\nDescription: {i['description']}" for i in data['insights']])
                             content.append({
                                 "question": "Recruiter Insights Sections",
                                 "answer": insights_text,
@@ -257,7 +262,8 @@ class WebContentSource(ContentSource):
                             "metadata": {"source": self.get_source_type(), "url": self.url, "type": "contact_info"}
                         })
                         if data.get('contact_info'):
-                            contact_details = "\n".join([f"{k}: {v}" for k, v in data['contact_info'].items()])
+                            contact_details = "\n".join(
+                                [f"{k}: {v}" for k, v in data['contact_info'].items()])
                             content.append({
                                 "question": "Contact Details",
                                 "answer": contact_details,
@@ -299,7 +305,8 @@ class WebContentSource(ContentSource):
                     tables = self.scraper.scrape_table_data(self.url)
                     for i, table in enumerate(tables):
                         if table:
-                            table_content = "\n".join([" | ".join(row) for row in table])
+                            table_content = "\n".join(
+                                [" | ".join(row) for row in table])
                             content.append({
                                 "question": f"Table Content {i + 1}",
                                 "answer": table_content,
@@ -313,7 +320,8 @@ class WebContentSource(ContentSource):
 
                     # Get WordPress recent posts if available
                     try:
-                        recent_posts = self.scraper.scrape_wordpress_recent_posts(self.url)
+                        recent_posts = self.scraper.scrape_wordpress_recent_posts(
+                            self.url)
                         for i, post in enumerate(recent_posts):
                             content.append({
                                 "question": f"Recent Post {i + 1}",
@@ -326,11 +334,13 @@ class WebContentSource(ContentSource):
                                 }
                             })
                     except Exception as wp_error:
-                        logger.debug(f"Not a WordPress site or no recent posts: {wp_error}")
+                        logger.debug(
+                            f"Not a WordPress site or no recent posts: {wp_error}")
 
                     # Try specific content areas if no content found yet
                     if not content:
-                        specific_content = self.scraper.scrape_specific_element(self.url, "div.entry-content, article, .content-area")
+                        specific_content = self.scraper.scrape_specific_element(
+                            self.url, "div.entry-content, article, .content-area")
                         for i, text in enumerate(specific_content):
                             if text.strip() and len(text.strip()) > 50:
                                 content.append({
@@ -347,14 +357,16 @@ class WebContentSource(ContentSource):
                 if not content:
                     raise ValueError("No content found at URL")
 
-                logger.info(f"Successfully scraped {len(content)} items from {self.url}")
+                logger.info(
+                    f"Successfully scraped {len(content)} items from {self.url}")
                 self._cache = content
                 return content
 
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
                 if attempt == self.max_retries - 1:
-                    raise RuntimeError(f"Failed to scrape content from {self.url} after {self.max_retries} attempts: {e}")
+                    raise RuntimeError(
+                        f"Failed to scrape content from {self.url} after {self.max_retries} attempts: {e}")
                 time.sleep(2 ** attempt)  # Exponential backoff
         return []
 # ---------------------------
@@ -716,7 +728,8 @@ class ContextAgent:
             r for r in results if r.confidence >= self.config.min_confidence]
 
         # Apply diversity filtering to avoid similar results
-        diverse_results = self._apply_diversity_filtering(filtered_results, query)
+        diverse_results = self._apply_diversity_filtering(
+            filtered_results, query)
 
         # Update stats
         search_time = time.time() - start_time
@@ -734,7 +747,7 @@ class ContextAgent:
         query_lower = query.lower()
         answer_text = entry.get('answer', '').lower()
         question_text = entry.get('question', '').lower()
-        
+
         # IISc M.Mgt specific terms
         domain_terms = {
             'iisc', 'm.mgt', 'management', 'bangalore', 'indian institute of science',
@@ -744,46 +757,48 @@ class ContextAgent:
             'hostel', 'accommodation', 'facility', 'library', 'gate', 'cat',
             'percentile', 'cutoff', 'marks', 'cgpa', 'engineering', 'technology'
         }
-        
+
         # Check if query contains domain terms
-        query_has_domain_terms = any(term in query_lower for term in domain_terms)
-        
+        query_has_domain_terms = any(
+            term in query_lower for term in domain_terms)
+
         # Check if content contains domain terms
-        content_has_domain_terms = any(term in answer_text or term in question_text 
-                                      for term in domain_terms)
-        
+        content_has_domain_terms = any(term in answer_text or term in question_text
+                                       for term in domain_terms)
+
         return query_has_domain_terms and content_has_domain_terms
 
     def _apply_diversity_filtering(self, results: List[SearchResult], query: str) -> List[SearchResult]:
         """Apply diversity filtering to avoid similar results"""
         if not results:
             return results
-        
+
         diverse_results = []
         used_content = []
-        
+
         for result in results:
             # Check if this result is too similar to already selected ones
             is_similar = False
             current_content = result.content.get('answer', '').lower()
             current_words = set(current_content.split())
-            
+
             for used_content_words in used_content:
                 # Calculate similarity between current and used content
                 if len(current_words) > 0 and len(used_content_words) > 0:
-                    similarity = len(current_words.intersection(used_content_words)) / len(current_words.union(used_content_words))
+                    similarity = len(current_words.intersection(
+                        used_content_words)) / len(current_words.union(used_content_words))
                     if similarity > 0.6:  # If more than 60% similar, skip
                         is_similar = True
                         break
-            
+
             if not is_similar:
                 diverse_results.append(result)
                 used_content.append(current_words)
-                
+
                 # Limit to reasonable number of diverse results
                 if len(diverse_results) >= 5:
                     break
-        
+
         return diverse_results
 
 # ---------------------------
@@ -856,8 +871,8 @@ class QAAgent:
                 "max_new_tokens": min(100, self.config.max_new_tokens),
                 "temperature": 0.3,  # Lower temperature for more factual responses
                 "top_p": 0.9,
-                "do_sample": True,
-                "return_full_text": False
+                "do_sample": True
+                # Note: return_full_text is not supported by text2text-generation pipeline
             }
 
             # Add GPU-specific optimizations
@@ -884,8 +899,8 @@ class QAAgent:
                     "task": "question-answering",  # Use Q&A pipeline for DistilBERT
                     "model": "distilbert-base-cased-distilled-squad",  # Smaller Q&A model
                     "tokenizer": AutoTokenizer.from_pretrained("distilbert-base-cased-distilled-squad"),
-                    "max_answer_len": 100,
-                    "return_full_text": False
+                    "max_answer_len": 100
+                    # Note: return_full_text is not supported by question-answering pipeline
                 }
 
                 if pipeline_kwargs["tokenizer"].pad_token is None:
@@ -1105,7 +1120,8 @@ Answer:"""
             return True
         elif has_numerical_info and grounding_score >= 0.15:  # Higher threshold for numerical info
             return True
-        elif len(answer.split()) >= 12 and grounding_score >= 0.2:  # Longer answers need better grounding
+        # Longer answers need better grounding
+        elif len(answer.split()) >= 12 and grounding_score >= 0.2:
             return True
         else:
             return False
@@ -1207,41 +1223,44 @@ Answer:"""
         """Calculate how relevant a content piece is to the query"""
         query_lower = query.lower()
         query_words = set(query_lower.split())
-        
+
         # Get content text
         answer_text = content.get('answer', '').lower()
         question_text = content.get('question', '').lower()
-        
+
         # Calculate word overlap
         answer_words = set(answer_text.split())
         question_words = set(question_text.split())
-        
+
         # Remove common stop words
-        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but',
+                      'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
         query_words = query_words - stop_words
         answer_words = answer_words - stop_words
         question_words = question_words - stop_words
-        
+
         if not query_words:
             return 0.0
-        
+
         # Calculate overlap scores
-        answer_overlap = len(query_words.intersection(answer_words)) / len(query_words)
-        question_overlap = len(query_words.intersection(question_words)) / len(query_words)
-        
+        answer_overlap = len(query_words.intersection(
+            answer_words)) / len(query_words)
+        question_overlap = len(query_words.intersection(
+            question_words)) / len(query_words)
+
         # Weight question overlap more heavily as it's more indicative of relevance
         relevance_score = (question_overlap * 0.7) + (answer_overlap * 0.3)
-        
+
         return min(1.0, relevance_score)
 
     def _assess_answer_quality(self, answer: str, query: str) -> float:
         """Assess the overall quality of an answer"""
         if not answer or not query:
             return 0.0
-        
+
         answer_lower = answer.lower()
         query_lower = query.lower()
-        
+
         # Length quality (not too short, not too long)
         word_count = len(answer.split())
         if 10 <= word_count <= 100:
@@ -1250,7 +1269,7 @@ Answer:"""
             length_score = 0.8
         else:
             length_score = 0.5
-        
+
         # Specificity score
         specificity_score = 0.0
         if self._has_specific_information(answer):
@@ -1259,7 +1278,7 @@ Answer:"""
             specificity_score += 0.2
         if self._check_domain_relevance(answer):
             specificity_score += 0.3
-        
+
         # Coherence score (basic sentence structure)
         coherence_score = 0.0
         if any(char in answer for char in ['.', '!', '?']):
@@ -1268,10 +1287,11 @@ Answer:"""
             coherence_score += 0.2
         if not any(phrase in answer_lower for phrase in ['i cannot', 'i don\'t know', 'sorry']):
             coherence_score += 0.3
-        
+
         # Query relevance score
-        query_relevance = self._calculate_grounding_score(answer_lower, query_lower)
-        
+        query_relevance = self._calculate_grounding_score(
+            answer_lower, query_lower)
+
         # Combine scores
         total_score = (
             length_score * 0.2 +
@@ -1279,7 +1299,7 @@ Answer:"""
             coherence_score * 0.2 +
             query_relevance * 0.2
         )
-        
+
         return min(1.0, total_score)
 
     def _check_domain_relevance(self, answer: str) -> bool:
@@ -1321,7 +1341,7 @@ Answer:"""
     def _has_specific_information(self, answer: str) -> bool:
         """Check if answer contains specific, actionable information"""
         answer_lower = answer.lower()
-        
+
         # Look for specific terms that indicate actionable information
         specific_indicators = [
             'specific', 'exact', 'precise', 'detailed', 'particular',
@@ -1335,7 +1355,7 @@ Answer:"""
             'company', 'firm', 'organization', 'institution', 'university',
             'faculty', 'professor', 'researcher', 'student', 'graduate'
         ]
-        
+
         # Check for specific IISc M.Mgt terms
         domain_specific_terms = [
             'iisc', 'm.mgt', 'management', 'bangalore', 'indian institute',
@@ -1344,11 +1364,13 @@ Answer:"""
             'project', 'internship', 'summer', 'faculty', 'research',
             'campus', 'hostel', 'accommodation', 'facility', 'library'
         ]
-        
+
         # Count specific indicators
-        specific_count = sum(1 for term in specific_indicators if term in answer_lower)
-        domain_count = sum(1 for term in domain_specific_terms if term in answer_lower)
-        
+        specific_count = sum(
+            1 for term in specific_indicators if term in answer_lower)
+        domain_count = sum(
+            1 for term in domain_specific_terms if term in answer_lower)
+
         # Answer is specific if it has multiple specific indicators or domain-specific terms
         return specific_count >= 3 or domain_count >= 2
 
@@ -1386,7 +1408,8 @@ Answer:"""
         )
 
         if selected_sentences:
-            result = self._format_final_answer_improved(selected_sentences, query_type)
+            result = self._format_final_answer_improved(
+                selected_sentences, query_type)
             return result
 
         return ""
@@ -1536,52 +1559,52 @@ Answer:"""
         """Improved sentence selection with better coherence and relevance"""
         selected = []
         used_content = []
-        
+
         # First pass: select high-scoring sentences
         for sentence, score, _ in sentence_scores:
             if len(selected) >= max_sentences:
                 break
-                
+
             if score <= 0:
                 continue
-                
+
             # Avoid very similar sentences
             sentence_words = set(sentence.lower().split())
             if not any(len(sentence_words.intersection(used)) > len(sentence_words) * 0.6
                        for used in used_content):
                 selected.append(sentence)
                 used_content.append(sentence_words)
-        
+
         # If we have enough sentences, return them
         if len(selected) >= 2:
             return selected
-            
+
         # Second pass: if we need more sentences, be more lenient
         for sentence, score, _ in sentence_scores:
             if len(selected) >= max_sentences:
                 break
-                
+
             if score <= 0:
                 continue
-                
+
             # Check if this sentence is already selected
             if sentence in selected:
                 continue
-                
+
             # More lenient similarity check
             sentence_words = set(sentence.lower().split())
             if not any(len(sentence_words.intersection(used)) > len(sentence_words) * 0.8
                        for used in used_content):
                 selected.append(sentence)
                 used_content.append(sentence_words)
-        
+
         return selected
 
     def _format_final_answer_improved(self, sentences: list, query_type: str) -> str:
         """Format the final answer with better coherence and structure"""
         if not sentences:
             return ""
-        
+
         # Clean and prepare sentences
         cleaned_sentences = []
         for sentence in sentences:
@@ -1591,33 +1614,34 @@ Answer:"""
                 if not sent.endswith(('.', '!', '?')):
                     sent += '.'
                 cleaned_sentences.append(sent)
-        
+
         if not cleaned_sentences:
             return ""
-        
+
         # Join sentences with proper spacing
         result = ' '.join(cleaned_sentences)
-        
+
         # Clean up any double periods or spaces
         result = result.replace('..', '.')
         result = result.replace('  ', ' ')
-        
+
         # Add query-type specific formatting
         if query_type in ['placement', 'salary', 'ctc']:
             # For placement questions, ensure numerical information is clear
             if any(char.isdigit() for char in result):
-                result = result.replace('₹', '₹').replace('LPA', ' LPA').replace('lpa', ' LPA')
-        
+                result = result.replace('₹', '₹').replace(
+                    'LPA', ' LPA').replace('lpa', ' LPA')
+
         elif query_type in ['eligibility', 'admission']:
             # For admission questions, ensure requirements are clear
             if 'required' in result.lower() or 'need' in result.lower():
                 result = result.replace(' - ', '. ').replace('- ', '. ')
-        
+
         elif query_type in ['curriculum', 'course']:
             # For curriculum questions, ensure course structure is clear
             if 'include' in result.lower() or 'consist' in result.lower():
                 result = result.replace(' - ', '. ').replace('- ', '. ')
-        
+
         return result.strip()
 
     def _format_final_answer(self, sentences: list) -> str:
@@ -2006,23 +2030,26 @@ Answer:"""
             # Weight by position and source quality
             weighted_confidence = 0
             total_weight = 0
-            
+
             for i, result in enumerate(search_results[:3]):
                 # Position weight (first results are more important)
                 position_weight = 1.0 / (i + 1)  # 1.0, 0.5, 0.33...
-                
+
                 # Source quality weight
-                source_type = result.content.get("metadata", {}).get("source", "unknown")
+                source_type = result.content.get(
+                    "metadata", {}).get("source", "unknown")
                 source_weight = 1.0
                 if source_type == "json":
                     source_weight = 1.3  # Higher weight for curated FAQ data
                 elif source_type == "web":
                     source_weight = 0.9  # Lower weight for web content
-                
+
                 # Content relevance weight
-                content_relevance = self._calculate_content_relevance(result.content, query)
-                relevance_weight = 1.0 + (content_relevance * 0.5)  # Boost up to 50%
-                
+                content_relevance = self._calculate_content_relevance(
+                    result.content, query)
+                relevance_weight = 1.0 + \
+                    (content_relevance * 0.5)  # Boost up to 50%
+
                 # Combined weight
                 combined_weight = position_weight * source_weight * relevance_weight
                 weighted_confidence += result.confidence * combined_weight
@@ -2034,16 +2061,18 @@ Answer:"""
             good_matches = [r for r in search_results if r.confidence > 0.7]
             json_sources = [r for r in search_results if r.content.get(
                 "metadata", {}).get("source") == "json"]
-            
+
             # Check answer quality
             answer_quality = self._assess_answer_quality(answer, query)
-            
+
             # Apply quality-based adjustments
             if answer_quality > 0.8:
-                avg_confidence = min(1.0, avg_confidence * 1.1)  # Boost for high-quality answers
+                # Boost for high-quality answers
+                avg_confidence = min(1.0, avg_confidence * 1.1)
             elif answer_quality < 0.4:
-                avg_confidence = max(0.0, avg_confidence * 0.8)  # Reduce for low-quality answers
-            
+                # Reduce for low-quality answers
+                avg_confidence = max(0.0, avg_confidence * 0.8)
+
             if len(good_matches) >= 2:
                 avg_confidence = min(1.0, avg_confidence * 1.15)
             elif len(json_sources) >= 1:
